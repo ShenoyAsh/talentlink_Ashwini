@@ -2,12 +2,11 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
 
+# This is a custom User model that extends Django's default.
+# We are REMOVING user_type from here.
 class User(AbstractUser):
-    USER_TYPE_CHOICES = (
-        ('freelancer', 'Freelancer'),
-        ('client', 'Client'),
-    )
-    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='freelancer')
+    # No user_type field here. It belongs on the Profile.
+    pass
 
 class Skill(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -20,7 +19,8 @@ class Profile(models.Model):
         ('freelancer', 'Freelancer'),
         ('client', 'Client'),
     )
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    # The user_type is now correctly placed here.
     user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='freelancer')
     headline = models.CharField(max_length=255, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
@@ -45,6 +45,7 @@ class Project(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
     budget = models.DecimalField(max_digits=10, decimal_places=2)
+    duration = models.IntegerField(null=True, blank=True, help_text="Duration in days")
     skills_required = models.ManyToManyField(Skill, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -69,6 +70,7 @@ class Proposal(models.Model):
     def __str__(self):
         return f"Proposal for {self.project.title} by {self.freelancer.username}"
 
+# Other models (Contract, Message, Review) remain the same...
 class Contract(models.Model):
     project = models.OneToOneField(Project, on_delete=models.CASCADE)
     freelancer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -87,7 +89,7 @@ class Message(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"From {self.sender.username} to {self.receiver.username} at {self.timestamp}"
+        return f"From {self.sender.username} to {self.receiver.username}"
 
 class Review(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='reviews')
@@ -98,4 +100,5 @@ class Review(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Review for {self.project.title} by {self.reviewer.username}"
+        return f"Review for {self.project.title}"
+
