@@ -1,30 +1,29 @@
 from rest_framework import viewsets, permissions, generics
-from rest_framework.response import Response
-from .models import User, Profile, Skill, Project, Proposal, Contract, Message, Review
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters
+from .models import User, Profile, Skill, Project, Proposal
 from .serializers import (
-    UserSerializer, ProfileSerializer, SkillSerializer, ProjectSerializer,
-    ProposalSerializer, ContractSerializer, MessageSerializer, ReviewSerializer
+    RegisterSerializer, UserSerializer, ProfileSerializer, SkillSerializer, 
+    ProjectSerializer, ProposalSerializer
 )
 
+# --- (Permissions classes remain the same) ---
 class IsClient(permissions.BasePermission):
-    """
-    Allows access only to client users.
-    """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.user_type == 'client'
+        # Check if the user has a profile and if that profile is a client
+        return request.user and request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile.user_type == 'client'
 
 class IsFreelancer(permissions.BasePermission):
-    """
-    Allows access only to freelancer users.
-    """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.user_type == 'freelancer'
+        # Check if the user has a profile and if that profile is a freelancer
+        return request.user and request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile.user_type == 'freelancer'
 
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [permissions.AllowAny]
-    serializer_class = UserSerializer
+    serializer_class = RegisterSerializer
+
 
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
@@ -39,48 +38,57 @@ class SkillViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SkillSerializer
     permission_classes = [permissions.AllowAny]
 
+# --- UPDATED ProjectViewSet ---
 class ProjectViewSet(viewsets.ModelViewSet):
-    queryset = Project.objects.all()
+    queryset = Project.objects.all().order_by('-created_at')
     serializer_class = ProjectSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    # Add filtering backends
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    
+    # Define fields for filtering and searching
+    filterset_fields = ['status', 'skills_required']
+    search_fields = ['title', 'description']
+    ordering_fields = ['budget', 'created_at']
+
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             self.permission_classes = [IsClient]
-        else:
-            self.permission_classes = [permissions.IsAuthenticated]
         return super().get_permissions()
 
     def perform_create(self, serializer):
         serializer.save(client=self.request.user)
     
     def get_queryset(self):
-        # Allow clients to see their own projects, freelancers to see all open projects
         user = self.request.user
-        if user.user_type == 'client':
-            return Project.objects.filter(client=user)
-        return Project.objects.filter(status='open')
+        if user.is_authenticated and hasattr(user, 'profile') and user.profile.user_type == 'client':
+            return self.queryset.filter(client=user)
+        # Freelancers and guests can see all open projects
+        return self.queryset.filter(status='open')
 
+# --- UPDATED ProposalViewSet ---
 class ProposalViewSet(viewsets.ModelViewSet):
     queryset = Proposal.objects.all()
     serializer_class = ProposalSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
         if self.action == 'create':
             self.permission_classes = [IsFreelancer]
-        else:
-            self.permission_classes = [permissions.IsAuthenticated]
         return super().get_permissions()
 
     def perform_create(self, serializer):
+        # Automatically set the freelancer to the current user
         serializer.save(freelancer=self.request.user)
 
     def get_queryset(self):
-        # Freelancers see their proposals, clients see proposals for their projects
         user = self.request.user
-        if user.user_type == 'freelancer':
-            return Proposal.objects.filter(freelancer=user)
-        elif user.user_type == 'client':
-            return Proposal.objects.filter(project__client=user)
+        if hasattr(user, 'profile') and user.profile.user_type == 'freelancer':
+            # A freelancer can see all proposals they have submitted
+            return self.queryset.filter(freelancer=user)
+        elif hasattr(user, 'profile') and user.profile.user_type == 'client':
+            # A client can see all proposals submitted to their projects
+            return self.queryset.filter(project__client=user)
         return Proposal.objects.none()
-
-# ... You can create similar ViewSets for Contract, Message, and Review with appropriate permissions ...

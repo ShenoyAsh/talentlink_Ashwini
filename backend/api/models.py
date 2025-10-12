@@ -16,7 +16,12 @@ class Skill(models.Model):
         return self.name
 
 class Profile(models.Model):
+    USER_TYPE_CHOICES = (
+        ('freelancer', 'Freelancer'),
+        ('client', 'Client'),
+    )
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default='freelancer')
     headline = models.CharField(max_length=255, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
