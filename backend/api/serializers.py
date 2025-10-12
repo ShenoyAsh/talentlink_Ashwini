@@ -25,7 +25,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        # Important: We removed user_type from here, as it lives on the profile
+    
         fields = ('id', 'username', 'email')
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -48,14 +48,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 # --- UPDATED ProposalSerializer ---
 class ProposalSerializer(serializers.ModelSerializer):
-    # We want to show the freelancer's username, not just their ID
+
     freelancer = serializers.StringRelatedField(read_only=True)
-    # When listing proposals, we also want to know which project it's for
+    
     project_title = serializers.CharField(source='project.title', read_only=True)
 
     class Meta:
         model = Proposal
-        # We need the 'project' ID when creating a proposal
+       
         fields = ('id', 'project', 'project_title', 'freelancer', 'cover_letter', 'proposed_rate', 'status', 'submitted_at')
-        # The freelancer is set automatically, so it's read-only
+       
         read_only_fields = ('freelancer', 'project_title')

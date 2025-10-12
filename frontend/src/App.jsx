@@ -2,7 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 
-// Import React Bootstrap components
+
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup } from 'react-bootstrap';
 import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search } from 'lucide-react';
 
@@ -395,7 +395,7 @@ const ProjectCreatePage = () => {
 };
 
 
-const DashboardPage = () => { /* Updated to show proposals for clients */
+const DashboardPage = () => { 
     const { user } = useAuth();
     const [proposals, setProposals] = useState([]);
     const [loading, setLoading] = useState(true);

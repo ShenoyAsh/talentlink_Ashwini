@@ -70,7 +70,7 @@ class Proposal(models.Model):
     def __str__(self):
         return f"Proposal for {self.project.title} by {self.freelancer.username}"
 
-# Other models (Contract, Message, Review) remain the same...
+
 class Contract(models.Model):
     project = models.OneToOneField(Project, on_delete=models.CASCADE)
     freelancer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
