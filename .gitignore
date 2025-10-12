@@ -1,0 +1,13 @@
+    # Environment files
+    backend_env
+    .env
+    
+    # Python/Django backend
+    /backend/venv/
+    __pycache__/
+    *.pyc
+    
+    # Node.js/React frontend
+    /frontend/node_modules/
+    /frontend/dist/
+    npm-debug.log
