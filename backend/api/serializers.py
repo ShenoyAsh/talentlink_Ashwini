@@ -31,9 +31,13 @@ class UserSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField(read_only=True)
     skills = SkillSerializer(many=True, read_only=True)
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        many=True, write_only=True, queryset=Skill.objects.all(), source='skills'
+    )
+
     class Meta:
         model = Profile
-        fields = ('id', 'user', 'user_type', 'headline', 'bio', 'skills', 'portfolio_link', 'hourly_rate')
+        fields = ('id', 'user', 'user_type', 'headline', 'bio', 'skills', 'skill_ids', 'portfolio_link', 'hourly_rate')
 
 class ProjectSerializer(serializers.ModelSerializer):
     client = serializers.StringRelatedField(read_only=True)
