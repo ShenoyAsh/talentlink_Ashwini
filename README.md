@@ -40,14 +40,5 @@ Clients can post projects, and freelancers can submit proposals to find work.
 
 ---
 
-## Getting Started
-
-To get a local copy up and running, follow these simple steps.
-
-### Prerequisites
-- **Python 3.x**
-- **Node.js and npm**
-
----
 
 
