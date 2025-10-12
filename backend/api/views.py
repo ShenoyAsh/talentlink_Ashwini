@@ -3,7 +3,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from .models import User, Profile, Skill, Project, Proposal
 from .serializers import (
-    RegisterSerializer, UserSerializer, ProfileSerializer, SkillSerializer, 
+    RegisterSerializer, UserSerializer, ProfileSerializer, SkillSerializer,
     ProjectSerializer, ProposalSerializer
 )
 
@@ -43,10 +43,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by('-created_at')
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+
     # Add filtering backends
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    
+
     # Define fields for filtering and searching
     filterset_fields = ['status', 'skills_required']
     search_fields = ['title', 'description']
@@ -60,7 +60,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(client=self.request.user)
-    
+
     def get_queryset(self):
         user = self.request.user
         if user.is_authenticated and hasattr(user, 'profile') and user.profile.user_type == 'client':

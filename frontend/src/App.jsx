@@ -260,7 +260,7 @@ const ProjectListPage = () => { /* Updated with Search */
                 setLoading(false);
             }
         };
-        
+
         // Debounce search to avoid too many API calls
         const timer = setTimeout(() => {
             fetchProjects();
@@ -268,7 +268,7 @@ const ProjectListPage = () => { /* Updated with Search */
 
         return () => clearTimeout(timer);
 
-    }, [searchTerm]); 
+    }, [searchTerm]);
 
     return (
         <Container className="py-5">
