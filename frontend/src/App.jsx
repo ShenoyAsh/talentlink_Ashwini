@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import './App.css';
 
 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup } from 'react-bootstrap';
@@ -130,9 +131,9 @@ const HomePage = () => {
         <Container className="py-5">
             <h2 className="text-center mb-4">Recent Projects</h2>
             <Row>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>E-commerce Website Development</Card.Title><Card.Text>Looking for a React developer to build a modern online store.</Card.Text><Badge bg="secondary" className="me-1">React</Badge><Badge bg="secondary">Django</Badge></Card.Body><Card.Footer className="fw-bold">₹2500</Card.Footer></Card></Col>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Mobile App UI/UX Design</Card.Title><Card.Text>Need a creative designer for a new fitness application.</Card.Text><Badge bg="secondary" className="me-1">Figma</Badge><Badge bg="secondary">UI/UX</Badge></Card.Body><Card.Footer className="fw-bold">₹1500</Card.Footer></Card></Col>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Content Writer for Tech Blog</Card.Title><Card.Text>Seeking a writer for long-form articles about AI and machine learning.</Card.Text><Badge bg="secondary">Content Writing</Badge></Card.Body><Card.Footer className="fw-bold">₹500 / hour</Card.Footer></Card></Col>
+                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>E-commerce Website Development</Card.Title><Card.Text>Looking for a React developer to build a modern online store.</Card.Text><Badge bg="secondary" className="me-1">React</Badge><Badge bg="secondary">Django</Badge></Card.Body><Card.Footer className="fw-bold">$2500</Card.Footer></Card></Col>
+                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Mobile App UI/UX Design</Card.Title><Card.Text>Need a creative designer for a new fitness application.</Card.Text><Badge bg="secondary" className="me-1">Figma</Badge><Badge bg="secondary">UI/UX</Badge></Card.Body><Card.Footer className="fw-bold">$1500</Card.Footer></Card></Col>
+                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Content Writer for Tech Blog</Card.Title><Card.Text>Seeking a writer for long-form articles about AI and machine learning.</Card.Text><Badge bg="secondary">Content Writing</Badge></Card.Body><Card.Footer className="fw-bold">$500 / hour</Card.Footer></Card></Col>
             </Row>
         </Container>
     </>
@@ -228,7 +229,7 @@ const SubmitProposalModal = ({ show, handleClose, projectId }) => {
                         <Form.Control as="textarea" rows={5} value={coverLetter} onChange={e => setCoverLetter(e.target.value)} />
                     </Form.Group>
                     <Form.Group>
-                        <Form.Label>Your Proposed Rate (₹)</Form.Label>
+                        <Form.Label>Your Proposed Rate ($)</Form.Label>
                         <Form.Control type="number" value={proposedRate} onChange={e => setProposedRate(e.target.value)} />
                     </Form.Group>
                 </Form>
@@ -284,7 +285,7 @@ const ProjectListPage = () => { /* Updated with Search */
 
             {loading ? <div className="text-center"><Spinner animation="border" /></div> :
              projects.length > 0 ? projects.map(project => (
-                <Card key={project.id} className="mb-3 shadow-sm">
+                <Card key={project.id} className="mb-3 shadow-sm project-card">
                     <Card.Body>
                         <Card.Title as={Link} to={`/project/${project.id}`} className="text-decoration-none">{project.title}</Card.Title>
                         <Card.Subtitle className="mb-2 text-muted">Posted by: {project.client}</Card.Subtitle>
@@ -336,7 +337,7 @@ const ProjectDetailPage = () => { /* Updated with Proposal Modal */
                         <Card><ListGroup variant="flush">
                             <ListGroup.Item className="d-flex justify-content-between align-items-center">
                                 <DollarSign size={20} className="me-2 text-success"/> <strong>Budget</strong>
-                                <span className="text-success fw-bold">₹{project.budget}</span>
+                                <span className="text-success fw-bold">${project.budget}</span>
                             </ListGroup.Item>
                              <ListGroup.Item className="d-flex justify-content-between align-items-center">
                                 <Clock size={20} className="me-2 text-info"/> <strong>Duration</strong>
@@ -384,7 +385,7 @@ const ProjectCreatePage = () => {
                     <Form.Group className="mb-3"><Form.Label>Project Title</Form.Label><Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required /></Form.Group>
                     <Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required /></Form.Group>
                     <Row>
-                        <Col><Form.Group className="mb-3"><Form.Label>Budget (₹)</Form.Label><Form.Control type="number" value={budget} onChange={e => setBudget(e.target.value)} required /></Form.Group></Col>
+                        <Col><Form.Group className="mb-3"><Form.Label>Budget ($)</Form.Label><Form.Control type="number" value={budget} onChange={e => setBudget(e.target.value)} required /></Form.Group></Col>
                         <Col><Form.Group className="mb-3"><Form.Label>Duration (days)</Form.Label><Form.Control type="number" value={duration} onChange={e => setDuration(e.target.value)} /></Form.Group></Col>
                     </Row>
                     <Button type="submit" variant="primary">Post Project</Button>
@@ -421,7 +422,7 @@ const DashboardPage = () => {
                 {loading ? <ListGroup.Item><Spinner size="sm"/></ListGroup.Item> :
                  proposals.length > 0 ? proposals.map(p => (
                     <ListGroup.Item key={p.id}>
-                        Proposal from <strong>{p.freelancer}</strong> for project "<strong>{p.project_title}</strong>" with a rate of <strong>₹{p.proposed_rate}</strong>.
+                        Proposal from <strong>{p.freelancer}</strong> for project "<strong>{p.project_title}</strong>" with a rate of <strong>${p.proposed_rate}</strong>.
                     </ListGroup.Item>
                  )) : <ListGroup.Item>No proposals received yet.</ListGroup.Item>
                 }
