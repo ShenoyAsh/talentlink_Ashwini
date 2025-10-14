@@ -68,7 +68,7 @@ const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, loading, axiosInstance }}>
             {children}
         </AuthContext.Provider>
     );
@@ -131,9 +131,9 @@ const HomePage = () => {
         <Container className="py-5">
             <h2 className="text-center mb-4">Recent Projects</h2>
             <Row>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>E-commerce Website Development</Card.Title><Card.Text>Looking for a React developer to build a modern online store.</Card.Text><Badge bg="secondary" className="me-1">React</Badge><Badge bg="secondary">Django</Badge></Card.Body><Card.Footer className="fw-bold">$2500</Card.Footer></Card></Col>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Mobile App UI/UX Design</Card.Title><Card.Text>Need a creative designer for a new fitness application.</Card.Text><Badge bg="secondary" className="me-1">Figma</Badge><Badge bg="secondary">UI/UX</Badge></Card.Body><Card.Footer className="fw-bold">$1500</Card.Footer></Card></Col>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Content Writer for Tech Blog</Card.Title><Card.Text>Seeking a writer for long-form articles about AI and machine learning.</Card.Text><Badge bg="secondary">Content Writing</Badge></Card.Body><Card.Footer className="fw-bold">$500 / hour</Card.Footer></Card></Col>
+                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>E-commerce Website Development</Card.Title><Card.Text>Looking for a React developer to build a modern online store.</Card.Text><Badge bg="secondary" className="me-1">React</Badge><Badge bg="secondary">Django</Badge></Card.Body><Card.Footer className="fw-bold">₹2500</Card.Footer></Card></Col>
+                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Mobile App UI/UX Design</Card.Title><Card.Text>Need a creative designer for a new fitness application.</Card.Text><Badge bg="secondary" className="me-1">Figma</Badge><Badge bg="secondary">UI/UX</Badge></Card.Body><Card.Footer className="fw-bold">₹1500</Card.Footer></Card></Col>
+                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Content Writer for Tech Blog</Card.Title><Card.Text>Seeking a writer for long-form articles about AI and machine learning.</Card.Text><Badge bg="secondary">Content Writing</Badge></Card.Body><Card.Footer className="fw-bold">₹500 / hour</Card.Footer></Card></Col>
             </Row>
         </Container>
     </>
@@ -197,6 +197,9 @@ const RegisterPage = () => {
 const SubmitProposalModal = ({ show, handleClose, projectId }) => {
     const [coverLetter, setCoverLetter] = useState('');
     const [proposedRate, setProposedRate] = useState('');
+    const [timeAvailable, setTimeAvailable] = useState('');
+    const [additionalInfo, setAdditionalInfo] = useState('');
+    const { axiosInstance } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async () => {
@@ -209,6 +212,8 @@ const SubmitProposalModal = ({ show, handleClose, projectId }) => {
                 project: projectId,
                 cover_letter: coverLetter,
                 proposed_rate: proposedRate,
+                time_available: timeAvailable,
+                additional_info: additionalInfo,
             });
             alert('Proposal submitted successfully!');
             handleClose();
@@ -229,8 +234,16 @@ const SubmitProposalModal = ({ show, handleClose, projectId }) => {
                         <Form.Control as="textarea" rows={5} value={coverLetter} onChange={e => setCoverLetter(e.target.value)} />
                     </Form.Group>
                     <Form.Group>
-                        <Form.Label>Your Proposed Rate ($)</Form.Label>
+                        <Form.Label>Your Proposed Rate (₹)</Form.Label>
                         <Form.Control type="number" value={proposedRate} onChange={e => setProposedRate(e.target.value)} />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Time Available</Form.Label>
+                        <Form.Control type="text" value={timeAvailable} onChange={e => setTimeAvailable(e.target.value)} />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Additional Information</Form.Label>
+                        <Form.Control as="textarea" rows={3} value={additionalInfo} onChange={e => setAdditionalInfo(e.target.value)} />
                     </Form.Group>
                 </Form>
             </Modal.Body>
@@ -247,6 +260,7 @@ const ProjectListPage = () => { /* Updated with Search */
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const { axiosInstance } = useAuth();
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -291,7 +305,7 @@ const ProjectListPage = () => { /* Updated with Search */
                         <Card.Subtitle className="mb-2 text-muted">Posted by: {project.client}</Card.Subtitle>
                         <Card.Text>{project.description.substring(0, 150)}...</Card.Text>
                         <div className="d-flex justify-content-between align-items-center">
-                            <span className="fw-bold fs-5">${project.budget}</span>
+                            <span className="fw-bold fs-5">₹{project.budget}</span>
                             <Button as={Link} to={`/project/${project.id}`} variant="outline-primary" size="sm">View Details</Button>
                         </div>
                     </Card.Body>
@@ -305,7 +319,7 @@ const ProjectDetailPage = () => { /* Updated with Proposal Modal */
     const { id } = useParams();
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
-    const { user } = useAuth();
+    const { user, axiosInstance } = useAuth();
     const [showProposalModal, setShowProposalModal] = useState(false);
 
     useEffect(() => {
@@ -337,11 +351,23 @@ const ProjectDetailPage = () => { /* Updated with Proposal Modal */
                         <Card><ListGroup variant="flush">
                             <ListGroup.Item className="d-flex justify-content-between align-items-center">
                                 <DollarSign size={20} className="me-2 text-success"/> <strong>Budget</strong>
-                                <span className="text-success fw-bold">${project.budget}</span>
+                                <span className="text-success fw-bold">₹{project.budget}</span>
                             </ListGroup.Item>
                              <ListGroup.Item className="d-flex justify-content-between align-items-center">
                                 <Clock size={20} className="me-2 text-info"/> <strong>Duration</strong>
                                 <span>{project.duration || 'N/A'} days</span>
+                            </ListGroup.Item>
+                            <ListGroup.Item>
+                                <strong>Skills Required:</strong>
+                                <div>
+                                    {project.skills_required.map(skill => (
+                                        <Badge key={skill.id} bg="secondary" className="me-2 mb-2">{skill.name}</Badge>
+                                    ))}
+                                </div>
+                            </ListGroup.Item>
+                            <ListGroup.Item>
+                                <strong>Time Slot:</strong>
+                                <p>{project.time_slot || 'N/A'}</p>
                             </ListGroup.Item>
                         </ListGroup>
                         {user?.user_type === 'freelancer' && (
@@ -363,12 +389,35 @@ const ProjectCreatePage = () => {
     const [description, setDescription] = useState('');
     const [budget, setBudget] = useState('');
     const [duration, setDuration] = useState('');
+    const [skills, setSkills] = useState([]);
+    const [availableSkills, setAvailableSkills] = useState([]);
+    const [timeSlot, setTimeSlot] = useState('');
+    const { axiosInstance } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchSkills = async () => {
+            try {
+                const response = await axiosInstance.get('/skills/');
+                setAvailableSkills(response.data.results || response.data);
+            } catch (error) {
+                console.error('Failed to fetch skills:', error);
+            }
+        };
+        fetchSkills();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axiosInstance.post('/projects/', { title, description, budget, duration });
+            await axiosInstance.post('/projects/', {
+                title,
+                description,
+                budget,
+                duration,
+                skill_ids: skills,
+                time_slot: timeSlot,
+            });
             alert('Project created successfully!');
             navigate('/dashboard');
         } catch (error) {
@@ -376,6 +425,11 @@ const ProjectCreatePage = () => {
             alert('Failed to create project.');
         }
     };
+    
+    const handleSkillChange = (e) => {
+        const selectedSkills = Array.from(e.target.selectedOptions, option => option.value);
+        setSkills(selectedSkills);
+    }
 
     return (
         <Container className="py-5">
@@ -385,9 +439,21 @@ const ProjectCreatePage = () => {
                     <Form.Group className="mb-3"><Form.Label>Project Title</Form.Label><Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required /></Form.Group>
                     <Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required /></Form.Group>
                     <Row>
-                        <Col><Form.Group className="mb-3"><Form.Label>Budget ($)</Form.Label><Form.Control type="number" value={budget} onChange={e => setBudget(e.target.value)} required /></Form.Group></Col>
+                        <Col><Form.Group className="mb-3"><Form.Label>Budget (₹)</Form.Label><Form.Control type="number" value={budget} onChange={e => setBudget(e.target.value)} required /></Form.Group></Col>
                         <Col><Form.Group className="mb-3"><Form.Label>Duration (days)</Form.Label><Form.Control type="number" value={duration} onChange={e => setDuration(e.target.value)} /></Form.Group></Col>
                     </Row>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Skills Required</Form.Label>
+                        <Form.Control as="select" multiple onChange={handleSkillChange}>
+                            {availableSkills.map(skill => (
+                                <option key={skill.id} value={skill.id}>{skill.name}</option>
+                            ))}
+                        </Form.Control>
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Time Slot</Form.Label>
+                        <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} />
+                    </Form.Group>
                     <Button type="submit" variant="primary">Post Project</Button>
                 </Form>
             </Card>
@@ -397,7 +463,7 @@ const ProjectCreatePage = () => {
 
 
 const DashboardPage = () => { 
-    const { user } = useAuth();
+    const { user, axiosInstance } = useAuth();
     const [proposals, setProposals] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -422,7 +488,7 @@ const DashboardPage = () => {
                 {loading ? <ListGroup.Item><Spinner size="sm"/></ListGroup.Item> :
                  proposals.length > 0 ? proposals.map(p => (
                     <ListGroup.Item key={p.id}>
-                        Proposal from <strong>{p.freelancer}</strong> for project "<strong>{p.project_title}</strong>" with a rate of <strong>${p.proposed_rate}</strong>.
+                        Proposal from <strong>{p.freelancer}</strong> for project "<strong>{p.project_title}</strong>" with a rate of <strong>₹{p.proposed_rate}</strong>.
                     </ListGroup.Item>
                  )) : <ListGroup.Item>No proposals received yet.</ListGroup.Item>
                 }

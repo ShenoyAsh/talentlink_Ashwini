@@ -47,6 +47,7 @@ class Project(models.Model):
     budget = models.DecimalField(max_digits=10, decimal_places=2)
     duration = models.IntegerField(null=True, blank=True, help_text="Duration in days")
     skills_required = models.ManyToManyField(Skill, blank=True)
+    time_slot = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -64,6 +65,8 @@ class Proposal(models.Model):
     freelancer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='proposals')
     cover_letter = models.TextField()
     proposed_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    time_available = models.CharField(max_length=100, blank=True, null=True)
+    additional_info = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
 

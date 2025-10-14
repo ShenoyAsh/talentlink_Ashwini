@@ -42,6 +42,9 @@ class ProfileSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     client = serializers.StringRelatedField(read_only=True)
     skills_required = SkillSerializer(many=True, read_only=True)
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        many=True, write_only=True, queryset=Skill.objects.all(), source='skills_required'
+    )
     class Meta:
         model = Project
         fields = '__all__'
@@ -56,6 +59,6 @@ class ProposalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Proposal
        
-        fields = ('id', 'project', 'project_title', 'freelancer', 'cover_letter', 'proposed_rate', 'status', 'submitted_at')
+        fields = ('id', 'project', 'project_title', 'freelancer', 'cover_letter', 'proposed_rate', 'status', 'submitted_at', 'time_available', 'additional_info')
        
         read_only_fields = ('freelancer', 'project_title')
