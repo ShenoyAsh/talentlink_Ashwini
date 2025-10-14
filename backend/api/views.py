@@ -6,6 +6,9 @@ from .serializers import (
     RegisterSerializer, UserSerializer, ProfileSerializer, SkillSerializer,
     ProjectSerializer, ProposalSerializer
 )
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
 
 # --- (Permissions classes remain the same) ---
 class IsClient(permissions.BasePermission):
@@ -77,6 +80,8 @@ class ProposalViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'create':
             self.permission_classes = [IsFreelancer]
+        elif self.action == 'update_status':
+            self.permission_classes = [IsClient]
         return super().get_permissions()
 
     def perform_create(self, serializer):
@@ -92,3 +97,18 @@ class ProposalViewSet(viewsets.ModelViewSet):
             # A client can see all proposals submitted to their projects
             return self.queryset.filter(project__client=user)
         return Proposal.objects.none()
+    
+    @action(detail=True, methods=['patch'])
+    def update_status(self, request, pk=None):
+        proposal = self.get_object()
+        # Check if the user is the client for the project
+        if proposal.project.client != request.user:
+            return Response({'detail': 'Not authorized.'}, status=status.HTTP_403_FORBIDDEN)
+
+        status_val = request.data.get('status')
+        if status_val not in ['accepted', 'rejected']:
+            return Response({'detail': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        proposal.status = status_val
+        proposal.save()
+        return Response(self.get_serializer(proposal).data)

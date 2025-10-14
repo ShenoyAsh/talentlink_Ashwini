@@ -5,7 +5,7 @@ import './App.css';
 
 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup } from 'react-bootstrap';
-import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search } from 'lucide-react';
+import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X } from 'lucide-react';
 
 const API_URL = 'http://127.0.0.1:8000/api';
 
@@ -444,7 +444,7 @@ const ProjectCreatePage = () => {
                     </Row>
                     <Form.Group className="mb-3">
                         <Form.Label>Skills Required</Form.Label>
-                        <Form.Control as="select" multiple onChange={handleSkillChange}>
+                        <Form.Control as="select" multiple value={skills} onChange={handleSkillChange}>
                             {availableSkills.map(skill => (
                                 <option key={skill.id} value={skill.id}>{skill.name}</option>
                             ))}
@@ -467,17 +467,28 @@ const DashboardPage = () => {
     const [proposals, setProposals] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const fetchProposals = async () => {
+        try {
+            const response = await axiosInstance.get('/proposals/');
+            setProposals(response.data.results || response.data);
+        } catch (error) { console.error("Failed to fetch proposals", error); }
+        finally { setLoading(false); }
+    };
+
     useEffect(() => {
         if (!user) return;
-        const fetchProposals = async () => {
-            try {
-                const response = await axiosInstance.get('/proposals/');
-                setProposals(response.data.results || response.data);
-            } catch (error) { console.error("Failed to fetch proposals", error); }
-            finally { setLoading(false); }
-        };
         fetchProposals();
     }, [user]);
+
+    const handleUpdateStatus = async (id, status) => {
+        try {
+            await axiosInstance.patch(`/proposals/${id}/update_status/`, { status });
+            fetchProposals(); // Refresh proposals after update
+        } catch (error) {
+            console.error('Failed to update proposal status:', error);
+            alert('Failed to update status.');
+        }
+    };
 
     if (!user) return <Spinner />;
 
@@ -487,8 +498,18 @@ const DashboardPage = () => {
             <ListGroup variant="flush">
                 {loading ? <ListGroup.Item><Spinner size="sm"/></ListGroup.Item> :
                  proposals.length > 0 ? proposals.map(p => (
-                    <ListGroup.Item key={p.id}>
-                        Proposal from <strong>{p.freelancer}</strong> for project "<strong>{p.project_title}</strong>" with a rate of <strong>₹{p.proposed_rate}</strong>.
+                    <ListGroup.Item key={p.id} className="d-flex justify-content-between align-items-center">
+                        <div>
+                            Proposal from <strong>{p.freelancer}</strong> for project "<strong>{p.project_title}</strong>" with a rate of <strong>₹{p.proposed_rate}</strong>.
+                        </div>
+                        <div>
+                            <Button variant="success" size="sm" className="me-2" onClick={() => handleUpdateStatus(p.id, 'accepted')}>
+                                <Check size={16} /> Accept
+                            </Button>
+                            <Button variant="danger" size="sm" onClick={() => handleUpdateStatus(p.id, 'rejected')}>
+                                <X size={16} /> Reject
+                            </Button>
+                        </div>
                     </ListGroup.Item>
                  )) : <ListGroup.Item>No proposals received yet.</ListGroup.Item>
                 }
@@ -496,21 +517,34 @@ const DashboardPage = () => {
         </Card>
     );
 
-    const renderFreelancerDashboard = () => (
-         <Card>
-            <Card.Header as="h5">My Submitted Proposals</Card.Header>
-            <ListGroup variant="flush">
-                {loading ? <ListGroup.Item><Spinner size="sm"/></ListGroup.Item> :
-                 proposals.length > 0 ? proposals.map(p => (
-                    <ListGroup.Item key={p.id} className="d-flex justify-content-between align-items-center">
-                        <div>Proposal for "<strong>{p.project_title}</strong>"</div>
-                        <Badge bg="info">{p.status}</Badge>
-                    </ListGroup.Item>
-                 )) : <ListGroup.Item>You have not submitted any proposals.</ListGroup.Item>
-                }
-            </ListGroup>
-        </Card>
-    );
+    const renderFreelancerDashboard = () => {
+        const getStatusBadge = (status) => {
+            switch (status) {
+                case 'accepted':
+                    return <Badge bg="success">Accepted</Badge>;
+                case 'rejected':
+                    return <Badge bg="danger">Rejected</Badge>;
+                default:
+                    return <Badge bg="warning">Pending</Badge>;
+            }
+        };
+
+        return (
+            <Card>
+                <Card.Header as="h5">My Submitted Proposals</Card.Header>
+                <ListGroup variant="flush">
+                    {loading ? <ListGroup.Item><Spinner size="sm"/></ListGroup.Item> :
+                     proposals.length > 0 ? proposals.map(p => (
+                        <ListGroup.Item key={p.id} className="d-flex justify-content-between align-items-center">
+                            <div>Proposal for "<strong>{p.project_title}</strong>"</div>
+                            {getStatusBadge(p.status)}
+                        </ListGroup.Item>
+                     )) : <ListGroup.Item>You have not submitted any proposals.</ListGroup.Item>
+                    }
+                </ListGroup>
+            </Card>
+        );
+    };
 
     return (
         <Container className="py-5">

@@ -11,4 +11,5 @@ router.register(r'proposals', ProposalViewSet, basename='proposal')
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('', include(router.urls)),
+    path('proposals/<int:pk>/update_status/', ProposalViewSet.as_view({'patch': 'update_status'}), name='proposal-update-status'),
 ]
