@@ -62,3 +62,30 @@ class ProposalSerializer(serializers.ModelSerializer):
         fields = ('id', 'project', 'project_title', 'freelancer', 'cover_letter', 'proposed_rate', 'status', 'submitted_at', 'time_available', 'additional_info')
        
         read_only_fields = ('freelancer', 'project_title')
+
+class ContractSerializer(serializers.ModelSerializer):
+    project = ProjectSerializer(read_only=True)
+    freelancer = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Contract
+        fields = '__all__'
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = serializers.StringRelatedField(read_only=True)
+    receiver = serializers.StringRelatedField()
+
+    class Meta:
+        model = Message
+        fields = ('id', 'sender', 'receiver', 'content', 'timestamp')
+        read_only_fields = ('sender', 'timestamp')
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    reviewer = serializers.StringRelatedField(read_only=True)
+    reviewee = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Review
+        fields = ('id', 'project', 'reviewer', 'reviewee', 'rating', 'comment', 'created_at')
+        read_only_fields = ('reviewer', 'reviewee', 'created_at')

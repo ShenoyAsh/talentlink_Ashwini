@@ -1,14 +1,15 @@
 from rest_framework import viewsets, permissions, generics
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
-from .models import User, Profile, Skill, Project, Proposal
+from .models import User, Profile, Skill, Project, Proposal, Contract, Message, Review
 from .serializers import (
     RegisterSerializer, UserSerializer, ProfileSerializer, SkillSerializer,
-    ProjectSerializer, ProposalSerializer
+    ProjectSerializer, ProposalSerializer, ContractSerializer, MessageSerializer, ReviewSerializer
 )
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+import datetime
 
 # --- (Permissions classes remain the same) ---
 class IsClient(permissions.BasePermission):
@@ -111,4 +112,61 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
         proposal.status = status_val
         proposal.save()
+        
+        if status_val == 'accepted':
+            Contract.objects.create(
+                project=proposal.project,
+                freelancer=proposal.freelancer,
+                agreed_rate=proposal.proposed_rate,
+                start_date=datetime.date.today() 
+            )
+            proposal.project.status = 'in_progress'
+            proposal.project.save()
+
         return Response(self.get_serializer(proposal).data)
+
+class ContractViewSet(viewsets.ModelViewSet):
+    queryset = Contract.objects.all()
+    serializer_class = ContractSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, 'profile') and user.profile.user_type == 'freelancer':
+            return self.queryset.filter(freelancer=user)
+        elif hasattr(user, 'profile') and user.profile.user_type == 'client':
+            return self.queryset.filter(project__client=user)
+        return Contract.objects.none()
+
+class MessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
+    serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return self.queryset.filter(sender=user) | self.queryset.filter(receiver=user)
+
+    def perform_create(self, serializer):
+        receiver_username = self.request.data.get('receiver')
+        try:
+            receiver = User.objects.get(username=receiver_username)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Receiver not found.")
+        serializer.save(sender=self.request.user, receiver=receiver)
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        project_id = self.request.data.get('project')
+        project = Project.objects.get(id=project_id)
+        # Add logic to determine reviewee based on user type
+        if self.request.user.profile.user_type == 'client':
+            reviewee = project.proposals.get(status='accepted').freelancer
+        else:
+            reviewee = project.client
+        serializer.save(reviewer=self.request.user, reviewee=reviewee)

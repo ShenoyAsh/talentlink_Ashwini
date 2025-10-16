@@ -5,6 +5,38 @@
   text-align: center;
 }
 
+/* Hero Section */
+.hero-section {
+    background: linear-gradient(45deg, #007bff, #6610f2);
+    color: white;
+    padding: 6rem 0;
+    text-align: center;
+}
+.hero-section h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+}
+.hero-section .lead {
+    font-size: 1.25rem;
+}
+
+
+/* Feature Section */
+.feature-section {
+    padding: 4rem 0;
+}
+.feature-icon {
+    font-size: 3rem;
+    color: #007bff;
+}
+.feature-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 15px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -55,13 +87,13 @@
 }
 
 .btn-primary {
-  background-color: #66a6ff;
+  background-color: #007bff;
   border: none;
   transition: background-color 0.3s, transform 0.3s;
 }
 
 .btn-primary:hover {
-  background-color: #535bf2;
+  background-color: #0056b3;
   transform: scale(1.05);
 }
 
@@ -97,11 +129,11 @@
 }
 
 .form-control:focus, .form-select:focus {
-  border-color: #66a6ff;
-  box-shadow: 0 0 0 0.25rem rgba(102, 166, 255, 0.25);
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
 }
 
 .form-check-input:checked {
-  background-color: #66a6ff;
-  border-color: #66a6ff;
+  background-color: #007bff;
+  border-color: #007bff;
 }

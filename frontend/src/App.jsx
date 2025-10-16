@@ -3,9 +3,13 @@ import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'reac
 import axios from 'axios';
 import './App.css';
 
-
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup } from 'react-bootstrap';
-import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X } from 'lucide-react';
+import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText } from 'lucide-react';
+import ProfilePage from './pages/ProfilePage';
+import ContractsPage from './pages/ContractsPage';
+import MessagingPage from './pages/MessagingPage';
+import ReviewPage from './pages/ReviewPage';
+
 
 const API_URL = 'http://127.0.0.1:8000/api';
 
@@ -74,7 +78,7 @@ const AuthProvider = ({ children }) => {
     );
 };
 
-const useAuth = () => useContext(AuthContext);
+export const useAuth = () => useContext(AuthContext);
 
 // --- Main Layout ---
 const AppNavbar = () => {
@@ -96,6 +100,7 @@ const AppNavbar = () => {
                         {user ? (
                             <>
                                 <Nav.Link as={Link} to="/dashboard">Dashboard</Nav.Link>
+                                <Nav.Link as={Link} to="/profile">Profile</Nav.Link>
                                 <Button variant="outline-danger" size="sm" onClick={logout}>
                                     <LogOut size={16} className="me-1" /> Logout
                                 </Button>
@@ -118,7 +123,7 @@ const AppNavbar = () => {
 const HomePage = () => {
     return (
     <>
-        <div className="bg-primary text-white text-center py-5">
+        <div className="hero-section">
             <Container>
                 <h1 className="display-4 fw-bold mb-3">Find & Hire Experts for any Job</h1>
                 <p className="lead mb-4">Unlock your potential. We connect you with top freelance talent and exciting projects.</p>
@@ -129,11 +134,22 @@ const HomePage = () => {
             </Container>
         </div>
         <Container className="py-5">
-            <h2 className="text-center mb-4">Recent Projects</h2>
-            <Row>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>E-commerce Website Development</Card.Title><Card.Text>Looking for a React developer to build a modern online store.</Card.Text><Badge bg="secondary" className="me-1">React</Badge><Badge bg="secondary">Django</Badge></Card.Body><Card.Footer className="fw-bold">₹2500</Card.Footer></Card></Col>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Mobile App UI/UX Design</Card.Title><Card.Text>Need a creative designer for a new fitness application.</Card.Text><Badge bg="secondary" className="me-1">Figma</Badge><Badge bg="secondary">UI/UX</Badge></Card.Body><Card.Footer className="fw-bold">₹1500</Card.Footer></Card></Col>
-                <Col md={4} className="mb-3"><Card className="h-100"><Card.Body><Card.Title>Content Writer for Tech Blog</Card.Title><Card.Text>Seeking a writer for long-form articles about AI and machine learning.</Card.Text><Badge bg="secondary">Content Writing</Badge></Card.Body><Card.Footer className="fw-bold">₹500 / hour</Card.Footer></Card></Col>
+             <Row className="text-center feature-section">
+                <Col md={4}>
+                    <img src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?q=80&w=2070&auto=format&fit=crop" alt="Collaboration" className="feature-image mb-3" />
+                    <h3>Connect</h3>
+                    <p>Join a vibrant community of professionals and businesses.</p>
+                </Col>
+                <Col md={4}>
+                    <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop" alt="Teamwork" className="feature-image mb-3" />
+                    <h3>Collaborate</h3>
+                    <p>Work together on innovative projects and achieve great results.</p>
+                </Col>
+                <Col md={4}>
+                    <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=2070&auto=format&fit=crop" alt="Creative Work" className="feature-image mb-3" />
+                    <h3>Create</h3>
+                    <p>Bring your ideas to life with the help of skilled freelancers.</p>
+                </Col>
             </Row>
         </Container>
     </>
@@ -549,15 +565,27 @@ const DashboardPage = () => {
     return (
         <Container className="py-5">
             <h1 className="mb-4">Dashboard</h1>
-            <Card className="shadow-sm mb-4">
-                <Card.Body>
-                    <Card.Title className="fs-2">Welcome back, {user.username}!</Card.Title>
-                    <Card.Text>Your user type is: <Badge bg="success" className="fs-6">{user.user_type}</Badge></Card.Text>
-                     {user.user_type === 'client' && <Button as={Link} to="/project/new" variant="primary"><PlusCircle size={16} className="me-1"/> Post New Project</Button>}
-                </Card.Body>
-            </Card>
-
-            {user.user_type === 'client' ? renderClientDashboard() : renderFreelancerDashboard()}
+            <Row>
+                <Col md={3}>
+                    <Card>
+                        <ListGroup variant="flush">
+                             <ListGroup.Item as={Link} to="/contracts"><FileText size={16} className="me-2"/> Contracts</ListGroup.Item>
+                             <ListGroup.Item as={Link} to="/messages"><MessageSquare size={16} className="me-2"/> Messages</ListGroup.Item>
+                             <ListGroup.Item as={Link} to="/reviews"><Award size={16} className="me-2"/> Reviews</ListGroup.Item>
+                        </ListGroup>
+                    </Card>
+                </Col>
+                <Col md={9}>
+                    <Card className="shadow-sm mb-4">
+                        <Card.Body>
+                            <Card.Title className="fs-2">Welcome back, {user.username}!</Card.Title>
+                            <Card.Text>Your user type is: <Badge bg="success" className="fs-6">{user.user_type}</Badge></Card.Text>
+                            {user.user_type === 'client' && <Button as={Link} to="/project/new" variant="primary"><PlusCircle size={16} className="me-1"/> Post New Project</Button>}
+                        </Card.Body>
+                    </Card>
+                     {user.user_type === 'client' ? renderClientDashboard() : renderFreelancerDashboard()}
+                </Col>
+            </Row>
         </Container>
     );
 }
@@ -577,6 +605,10 @@ function App() {
                         <Route path="/project/new" element={<ProjectCreatePage />} />
                         <Route path="/project/:id" element={<ProjectDetailPage />} />
                         <Route path="/dashboard" element={<DashboardPage />} />
+                        <Route path="/profile" element={<ProfilePage />} />
+                        <Route path="/contracts" element={<ContractsPage />} />
+                        <Route path="/messages" element={<MessagingPage />} />
+                        <Route path="/review/:projectId" element={<ReviewPage />} />
                     </Routes>
                 </main>
             </div>
