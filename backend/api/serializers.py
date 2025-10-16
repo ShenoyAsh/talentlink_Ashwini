@@ -37,7 +37,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ('id', 'user', 'user_type', 'headline', 'bio', 'skills', 'skill_ids', 'portfolio_link', 'hourly_rate')
+        fields = ('id', 'user', 'user_type', 'headline', 'bio', 'skills', 'skill_ids', 'portfolio_link', 'hourly_rate', 'country', 'timezone', 'profile_picture')
 
 class ProjectSerializer(serializers.ModelSerializer):
     client = serializers.StringRelatedField(read_only=True)

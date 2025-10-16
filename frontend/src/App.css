@@ -5,6 +5,19 @@
   text-align: center;
 }
 
+/* Authentication Pages Background */
+.auth-page {
+    background-image: url('https://images.unsplash.com/photo-1556740738-b6a63e27c4df?q=80&w=2070&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    min-height: 100vh;
+}
+.auth-card {
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+}
+
+
 /* Hero Section */
 .hero-section {
     background: linear-gradient(45deg, #007bff, #6610f2);

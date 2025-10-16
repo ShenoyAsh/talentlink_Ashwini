@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { Container, Card, Form, Button, Spinner, Alert, Badge, Row, Col } from 'react-bootstrap';
-import { User, Briefcase, DollarSign, Link as LinkIcon, Save } from 'lucide-react';
+import { User, Briefcase, DollarSign, Link as LinkIcon, Save, MapPin, Clock } from 'lucide-react';
 
 const ProfilePage = () => {
     const { user, axiosInstance } = useAuth();
@@ -94,6 +94,24 @@ const ProfilePage = () => {
                                         />
                                     </Form.Group>
                                     <Form.Group className="mb-3">
+                                        <Form.Label>Country</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            name="country"
+                                            value={formData.country || ''}
+                                            onChange={handleInputChange}
+                                        />
+                                    </Form.Group>
+                                     <Form.Group className="mb-3">
+                                        <Form.Label>Timezone</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            name="timezone"
+                                            value={formData.timezone || ''}
+                                            onChange={handleInputChange}
+                                        />
+                                    </Form.Group>
+                                    <Form.Group className="mb-3">
                                         <Form.Label>Portfolio Link</Form.Label>
                                         <Form.Control
                                             type="text"
@@ -127,6 +145,8 @@ const ProfilePage = () => {
                                     </div>
                                     <p><Briefcase size={16} className="me-2" /> <Badge bg="info">{profile.user_type}</Badge></p>
                                     <p>{profile.bio}</p>
+                                    {profile.country && <p><MapPin size={16} className="me-2" /> {profile.country}</p>}
+                                    {profile.timezone && <p><Clock size={16} className="me-2" /> {profile.timezone}</p>}
                                     {profile.portfolio_link && (
                                         <p><LinkIcon size={16} className="me-2" /> <a href={profile.portfolio_link} target="_blank" rel="noopener noreferrer">Portfolio</a></p>
                                     )}

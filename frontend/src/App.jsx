@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'reac
 import axios from 'axios';
 import './App.css';
 
-import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup } from 'react-bootstrap';
+import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup, Image } from 'react-bootstrap';
 import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText } from 'lucide-react';
 import ProfilePage from './pages/ProfilePage';
 import ContractsPage from './pages/ContractsPage';
@@ -50,7 +50,7 @@ const AuthProvider = ({ children }) => {
             const profileResponse = await axiosInstance.get('/profiles/');
             if (profileResponse.data.length > 0) {
                 const profile = profileResponse.data[0];
-                const userDetails = { username: profile.user, user_type: profile.user_type, profileId: profile.id };
+                const userDetails = { username: profile.user, user_type: profile.user_type, profileId: profile.id, profilePicture: profile.profile_picture };
                 setUser(userDetails);
                 localStorage.setItem('user', JSON.stringify(userDetails));
                 navigate('/dashboard');
@@ -96,12 +96,15 @@ const AppNavbar = () => {
                         <Nav.Link as={Link} to="/projects">Find Work</Nav.Link>
                         {user?.user_type === 'client' && <Nav.Link as={Link} to="/project/new">Post a Project</Nav.Link>}
                     </Nav>
-                    <Nav>
+                    <Nav className="align-items-center">
                         {user ? (
                             <>
                                 <Nav.Link as={Link} to="/dashboard">Dashboard</Nav.Link>
-                                <Nav.Link as={Link} to="/profile">Profile</Nav.Link>
-                                <Button variant="outline-danger" size="sm" onClick={logout}>
+                                <Nav.Link as={Link} to="/profile" className="d-flex align-items-center">
+                                    <Image src={user.profilePicture || `https://i.pravatar.cc/150?u=${user.username}`} roundedCircle style={{ width: '30px', height: '30px', marginRight: '8px' }} />
+                                    {user.username}
+                                </Nav.Link>
+                                <Button variant="outline-danger" size="sm" onClick={logout} className="ms-2">
                                     <LogOut size={16} className="me-1" /> Logout
                                 </Button>
                             </>
@@ -162,8 +165,8 @@ const LoginPage = () => {
     const { login, loading } = useAuth();
     const handleSubmit = (e) => { e.preventDefault(); login(username, password); };
     return (
-        <Container className="d-flex align-items-center justify-content-center" style={{ minHeight: '80vh' }}>
-            <Card style={{ width: '24rem' }} className="p-3 shadow-lg border-0">
+        <div className="auth-page d-flex align-items-center justify-content-center">
+            <Card style={{ width: '24rem' }} className="p-3 shadow-lg border-0 auth-card">
                 <Card.Body>
                     <h2 className="text-center mb-4">Sign In</h2>
                     <Form onSubmit={handleSubmit}>
@@ -173,7 +176,7 @@ const LoginPage = () => {
                     </Form>
                 </Card.Body>
             </Card>
-        </Container>
+        </div>
     );
 };
 
@@ -192,8 +195,8 @@ const RegisterPage = () => {
         } catch (error) { alert(`Registration failed: ${error.response?.data ? JSON.stringify(error.response.data) : "An error occurred."}`); }
     };
     return (
-        <Container className="d-flex align-items-center justify-content-center py-5">
-            <Card style={{ width: '24rem' }} className="p-3 shadow-lg border-0">
+         <div className="auth-page d-flex align-items-center justify-content-center py-5">
+            <Card style={{ width: '24rem' }} className="p-3 shadow-lg border-0 auth-card">
                 <Card.Body>
                     <h2 className="text-center mb-4">Create an Account</h2>
                     <Form onSubmit={handleSubmit}>
@@ -205,7 +208,7 @@ const RegisterPage = () => {
                     </Form>
                 </Card.Body>
             </Card>
-        </Container>
+        </div>
     );
 };
 
@@ -571,7 +574,6 @@ const DashboardPage = () => {
                         <ListGroup variant="flush">
                              <ListGroup.Item as={Link} to="/contracts"><FileText size={16} className="me-2"/> Contracts</ListGroup.Item>
                              <ListGroup.Item as={Link} to="/messages"><MessageSquare size={16} className="me-2"/> Messages</ListGroup.Item>
-                             <ListGroup.Item as={Link} to="/reviews"><Award size={16} className="me-2"/> Reviews</ListGroup.Item>
                         </ListGroup>
                     </Card>
                 </Col>
