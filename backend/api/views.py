@@ -12,7 +12,7 @@ from rest_framework import status
 import datetime
 from django.db.models import Q
 
-# --- (Permissions classes remain the same) ---
+
 class IsClient(permissions.BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile.user_type == 'client'
