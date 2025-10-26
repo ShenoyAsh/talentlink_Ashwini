@@ -1,23 +1,28 @@
 // frontend/src/App.jsx
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
+// Correct import if BrowserRouter is used here instead of main.jsx
+// import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
+// Use this import if BrowserRouter is in main.jsx (as is standard)
+import { Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
+import './index.css'; // Make sure index.css is imported if App.css doesn't cover everything
 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup, Image, Dropdown, Offcanvas } from 'react-bootstrap';
 import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon } from 'lucide-react'; // Added Bell, Edit, Trash2
 
 // Import new/updated pages and components
-import ProfilePage from './pages/ProfilePage'; // Assume this will be updated for Portfolio
+import ProfilePage from './pages/ProfilePage';
 import ContractsPage from './pages/ContractsPage';
 import MessagingPage from './pages/MessagingPage';
 import ReviewPage from './pages/ReviewPage';
-import ProjectEditPage from './pages/ProjectEditPage'; // New
-import ProposalEditPage from './pages/ProposalEditPage'; // New
-import NotificationsPage from './pages/NotificationsPage'; // New
+import ProjectEditPage from './pages/ProjectEditPage';
+// import ProposalEditPage from './pages/ProposalEditPage'; // Keep commented if using modal primarily
+import NotificationsPage from './pages/NotificationsPage';
 
 // Use environment variable or default
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'; // Base URL (for media)
+const API_URL = `${API_BASE_URL}/api`; // API endpoint
 
 
 // --- Axios Interceptor for Auth ---
@@ -25,7 +30,8 @@ const axiosInstance = axios.create({
     baseURL: API_URL,
     timeout: 5000, // Increased timeout slightly
     headers: {
-        'Content-Type': 'application/json', // Default content type
+        // Default content type - will be overridden for FormData
+        'Content-Type': 'application/json',
     }
 });
 
@@ -52,8 +58,10 @@ const AuthProvider = ({ children }) => {
             }
             // Handle multipart form data for file uploads
             if (config.data instanceof FormData) {
-                config.headers['Content-Type'] = 'multipart/form-data';
+                // Let the browser set the Content-Type header with the boundary
+                 delete config.headers['Content-Type'];
             } else {
+                 // Set JSON content type for other requests
                  config.headers['Content-Type'] = 'application/json';
             }
             return config;
@@ -66,7 +74,7 @@ const AuthProvider = ({ children }) => {
         };
     }, []);
 
-     // Axios Response Interceptor for Token Refresh (Simplified)
+     // Axios Response Interceptor for Token Refresh
     useEffect(() => {
         const resInterceptor = axiosInstance.interceptors.response.use(
             response => response,
@@ -85,25 +93,29 @@ const AuthProvider = ({ children }) => {
                         const newTokens = { ...currentTokens, access: refreshResponse.data.access };
                         setTokens(newTokens);
                         localStorage.setItem('authTokens', JSON.stringify(newTokens));
+                        // Update default header for subsequent requests by THIS instance
                         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newTokens.access}`;
+                         // Update header for the original request before retrying
                         originalRequest.headers['Authorization'] = `Bearer ${newTokens.access}`;
                         console.log("Token refreshed successfully.");
                         return axiosInstance(originalRequest); // Retry original request with new token
                     } catch (refreshError) {
-                        console.error("Token refresh failed:", refreshError);
+                        console.error("Token refresh failed:", refreshError?.response?.data || refreshError?.message || refreshError);
                         // Refresh failed, logout user
                         logout(false); // Pass false to prevent navigation if already on login
                         return Promise.reject(refreshError);
                     }
                 }
+                // For other errors, just reject the promise
                 return Promise.reject(error);
             }
         );
 
         return () => {
+            // Clean up the interceptor when the component unmounts or tokens change
             axiosInstance.interceptors.response.eject(resInterceptor);
         };
-    }, [tokens]); // Re-run if tokens change
+    }, [tokens]); // Re-run the effect if tokens change (to capture new refresh token if applicable)
 
     const login = async (username, password) => {
         setLoading(true);
@@ -112,27 +124,44 @@ const AuthProvider = ({ children }) => {
             const newTokens = tokenResponse.data;
             setTokens(newTokens);
             localStorage.setItem('authTokens', JSON.stringify(newTokens));
-            axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newTokens.access}`; // Use common for default
+            // Apply token immediately for the subsequent profile request
+            axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newTokens.access}`;
 
-             // Fetch profile immediately after getting token
-             const profileConfig = { headers: { Authorization: `Bearer ${newTokens.access}` } };
-             // Use axios directly here to ensure the latest token is used before interceptor might kick in fully
-             const profileResponse = await axios.get(`${API_URL}/profiles/`, profileConfig);
+             // Fetch profile immediately using the instance which now has the token header set
+             // Note: Depending on timing, the interceptor might not have run yet for this specific call,
+             // setting the default header above helps ensure it's present.
+             const profileResponse = await axiosInstance.get(`/profiles/`);
 
-            // Find the profile belonging to the logged-in user (assuming username matches profile.user)
-            // Adjust this logic if the API returns only the user's profile directly
-            const userProfile = profileResponse.data.results?.find(p => p.user === username) || profileResponse.data.find(p => p.user === username);
+            // The backend /profiles/ endpoint might return a list or just the user's profile
+            // Adjust finding logic based on what your API returns
+            const profileData = profileResponse.data.results || profileResponse.data; // Handle pagination or direct list/object
+            const userProfile = Array.isArray(profileData)
+                ? profileData.find(p => p.user === username)
+                : (profileData && profileData.user === username ? profileData : null); // Handle single object response
+
 
             if (userProfile) {
-                const userDetails = { username: userProfile.user, user_type: userProfile.user_type, profileId: userProfile.id, profilePicture: userProfile.profile_picture };
+                 // Construct the full profile picture URL here
+                 const getFullImageUrl = (url) => {
+                     if (!url) return null;
+                     if (url.startsWith('http')) return url;
+                     return `${API_BASE_URL}${url}`; // Prepend base URL
+                 };
+                const fullProfilePicUrl = getFullImageUrl(userProfile.profile_picture);
+
+                const userDetails = {
+                    username: userProfile.user,
+                    user_type: userProfile.user_type,
+                    profileId: userProfile.id,
+                    profilePicture: fullProfilePicUrl // Store the full URL
+                 };
                 setUser(userDetails);
                 localStorage.setItem('user', JSON.stringify(userDetails));
                  console.log("Login successful, navigating to dashboard.");
                 navigate('/dashboard');
             } else {
-                 console.error("Profile not found for user:", username);
-                 alert("Login succeeded but failed to retrieve user profile.");
-                 // Log out if profile fetch fails?
+                 console.error("Profile not found for user:", username, "API response:", profileResponse.data);
+                 alert("Login succeeded but failed to retrieve user profile details.");
                  logout(false);
             }
 
@@ -161,13 +190,36 @@ const AuthProvider = ({ children }) => {
          clearInterval(refreshIntervalRef.current); // Clear any scheduled refresh
      };
 
+     // Function to update user context (e.g., after profile picture update)
+      const updateUserContext = (updates) => {
+          setUser(prevUser => {
+              if (!prevUser) return null;
+               // Construct full URL for profilePicture if it's being updated
+               let finalUpdates = { ...updates };
+               if (updates.profilePicture) {
+                   const getFullImageUrl = (url) => {
+                       if (!url) return null;
+                       if (url.startsWith('http')) return url;
+                       return `${API_BASE_URL}${url}`;
+                   };
+                   finalUpdates.profilePicture = getFullImageUrl(updates.profilePicture);
+               }
+
+              const updatedUser = { ...prevUser, ...finalUpdates };
+              localStorage.setItem('user', JSON.stringify(updatedUser)); // Update local storage too
+              return updatedUser;
+          });
+       };
+
+
     if (authLoading) {
         return <div className="vh-100 d-flex justify-content-center align-items-center"><Spinner animation="border" /></div>; // Full page loader
     }
 
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading, axiosInstance, tokens }}>
+        // Pass updateUserContext down
+        <AuthContext.Provider value={{ user, login, logout, loading, axiosInstance, tokens, updateUserContext }}>
             {children}
         </AuthContext.Provider>
     );
@@ -185,61 +237,76 @@ const NotificationBell = () => {
 
     const fetchNotifications = async () => {
         if (!user) return;
-        setLoading(true);
+        // Don't set loading true for background polls to avoid UI flicker
+        // setLoading(true);
         try {
-            const response = await axiosInstance.get('/notifications/?read=false'); // Fetch only unread initially
+            // Fetch only unread count for the badge initially or during polls
+            const response = await axiosInstance.get('/notifications/?read=false'); // Adjust if backend doesn't support this filter
             const unread = response.data.results || response.data;
-            setNotifications(unread);
-            setUnreadCount(unread.length);
+            const count = Array.isArray(unread) ? unread.length : (response.data.count !== undefined ? response.data.count : 0); // Handle direct count or list length
+
+            // Only update state if the count actually changed
+            if (count !== unreadCount) {
+                setUnreadCount(count);
+            }
         } catch (error) {
-            console.error("Failed to fetch notifications:", error);
+            console.error("Failed to fetch unread notifications count:", error);
         } finally {
-            setLoading(false);
+            // setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchNotifications();
+        fetchNotifications(); // Initial fetch
         // Set up polling
         const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
-        return () => clearInterval(interval);
-    }, [user, axiosInstance]);
+        return () => clearInterval(interval); // Cleanup on unmount
+    }, [user, axiosInstance]); // Rerun if user or axiosInstance changes
+
 
     const handleToggleOffcanvas = async () => {
-        if (!showOffcanvas) {
-            // Fetch all notifications (including read) when opening
-             setLoading(true);
-             try {
-                 const response = await axiosInstance.get('/notifications/');
-                 setNotifications(response.data.results || response.data);
-                 setUnreadCount(response.data.results?.filter(n => !n.read).length || response.data?.filter(n => !n.read).length || 0);
-             } catch (error) {
-                 console.error("Failed to fetch all notifications:", error);
-             } finally {
-                 setLoading(false);
-             }
+        const currentlyShowing = showOffcanvas;
+        setShowOffcanvas(!currentlyShowing); // Toggle state immediately
+
+        if (!currentlyShowing) { // If opening the offcanvas
+            setLoading(true); // Show spinner inside offcanvas
+            try {
+                // Fetch all notifications (read and unread) for the panel
+                const response = await axiosInstance.get('/notifications/');
+                const allNotifications = response.data.results || response.data;
+                setNotifications(allNotifications);
+                // Update unread count based on the full list fetched
+                 setUnreadCount(allNotifications.filter(n => !n.read).length);
+            } catch (error) {
+                console.error("Failed to fetch all notifications:", error);
+                setNotifications([]); // Clear notifications on error maybe?
+            } finally {
+                setLoading(false);
+            }
         }
-        setShowOffcanvas(!showOffcanvas);
     };
 
      const markAsRead = async (id) => {
          try {
              await axiosInstance.patch(`/notifications/${id}/mark_read/`);
-             // Optimistically update UI or refetch
+             // Optimistically update UI
              setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-             setUnreadCount(prev => Math.max(0, prev - 1));
+             setUnreadCount(prev => Math.max(0, prev - 1)); // Decrement unread count
          } catch (error) {
              console.error("Failed to mark notification as read:", error);
+             alert("Could not mark notification as read."); // Inform user
          }
      };
 
      const markAllRead = async () => {
          try {
              await axiosInstance.post(`/notifications/mark-all-read/`);
+             // Optimistically update UI
              setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-             setUnreadCount(0);
+             setUnreadCount(0); // Set count to 0
          } catch (error) {
              console.error("Failed to mark all as read:", error);
+              alert("Could not mark all notifications as read."); // Inform user
          }
      };
 
@@ -251,38 +318,42 @@ const NotificationBell = () => {
                 {unreadCount > 0 && (
                     <Badge pill bg="danger" className="position-absolute top-0 start-100 translate-middle" style={{ fontSize: '0.6em', padding: '0.3em 0.5em' }}>
                         {unreadCount > 9 ? '9+' : unreadCount}
+                        <span className="visually-hidden">unread notifications</span>
                     </Badge>
                 )}
             </Nav.Link>
 
-            <Offcanvas show={showOffcanvas} onHide={() => setShowOffcanvas(false)} placement="end" title="Notifications">
+            <Offcanvas show={showOffcanvas} onHide={() => setShowOffcanvas(false)} placement="end">
                 <Offcanvas.Header closeButton>
                     <Offcanvas.Title>Notifications</Offcanvas.Title>
                 </Offcanvas.Header>
                 <Offcanvas.Body>
-                    {unreadCount > 0 && <Button variant="outline-secondary" size="sm" className="mb-2 w-100" onClick={markAllRead}>Mark all as read</Button>}
-                    {loading ? <Spinner animation="border" size="sm" /> :
+                     {/* Show Mark All Read button only if there are unread notifications in the currently displayed list */}
+                     {notifications.some(n => !n.read) && <Button variant="outline-secondary" size="sm" className="mb-2 w-100" onClick={markAllRead}>Mark all as read</Button>}
+
+                    {loading ? <div className="text-center"><Spinner animation="border" size="sm" /></div> :
                      notifications.length > 0 ? (
                         <ListGroup variant="flush">
                             {notifications.map(n => (
-                                <ListGroup.Item key={n.id} className={`d-flex justify-content-between align-items-start ${!n.read ? 'bg-light' : ''}`}>
+                                <ListGroup.Item key={n.id} className={`d-flex justify-content-between align-items-start ${!n.read ? 'bg-light' : ''}`} style={{ borderBottom: '1px solid #eee' }}>
                                     <div>
                                         <small className="text-muted">{new Date(n.timestamp).toLocaleString()}</small>
                                         <p className="mb-0">{n.message}</p>
                                     </div>
                                     {!n.read && (
-                                        <Button variant="link" size="sm" onClick={() => markAsRead(n.id)} title="Mark as read">
+                                        <Button variant="link" size="sm" onClick={() => markAsRead(n.id)} title="Mark as read" className="p-0">
                                             <Check size={16} />
                                         </Button>
                                     )}
                                 </ListGroup.Item>
                             ))}
-                             <ListGroup.Item className="text-center mt-2">
-                                <Link to="/notifications">View All Notifications</Link>
+                             {/* Link to full page */}
+                             <ListGroup.Item className="text-center mt-2 border-0">
+                                <Link to="/notifications" onClick={() => setShowOffcanvas(false)}>View All Notifications</Link>
                             </ListGroup.Item>
                         </ListGroup>
                     ) : (
-                        <p className="text-muted text-center">No new notifications.</p>
+                        <p className="text-muted text-center mt-3">No notifications.</p>
                     )}
                 </Offcanvas.Body>
             </Offcanvas>
@@ -294,6 +365,25 @@ const NotificationBell = () => {
 // --- Main Layout ---
 const AppNavbar = () => {
     const { user, logout } = useAuth();
+
+     // Function to construct full image URL
+     const getFullImageUrl = (url) => {
+         if (!url) return null;
+         // Check if it's already an absolute URL (starts with http or https)
+         if (/^https?:\/\//i.test(url)) {
+             return url;
+         }
+         // Check if it's a blob URL (for previews)
+          if (url.startsWith('blob:')) {
+             return url;
+         }
+         // Otherwise, prepend the base URL
+         return `${API_BASE_URL}${url}`;
+     };
+
+     const profilePicUrl = getFullImageUrl(user?.profilePicture) || `https://via.placeholder.com/30/ced4da/6c757d?text=${user?.username?.charAt(0).toUpperCase() || '?'}`; // Placeholder with grey colors
+
+
     return (
         <Navbar bg="white" expand="lg" className="shadow-sm sticky-top">
             <Container>
@@ -315,10 +405,10 @@ const AppNavbar = () => {
                                 {user && <NotificationBell />} {/* Add NotificationBell here */}
                                 <Nav.Link as={Link} to="/dashboard">Dashboard</Nav.Link>
                                 <Nav.Link as={Link} to="/profile" className="d-flex align-items-center">
-                                    <Image src={user.profilePicture || `https://via.placeholder.com/30/007bff/FFFFFF?text=${user.username.charAt(0).toUpperCase()}`} roundedCircle style={{ width: '30px', height: '30px', marginRight: '8px', objectFit: 'cover' }} />
+                                    <Image src={profilePicUrl} roundedCircle style={{ width: '30px', height: '30px', marginRight: '8px', objectFit: 'cover', border: '1px solid #dee2e6' }} />
                                     {user.username}
                                 </Nav.Link>
-                                <Button variant="outline-danger" size="sm" onClick={() => logout()} className="ms-2">
+                                <Button variant="outline-danger" size="sm" onClick={() => logout(true)} className="ms-2"> {/* Ensure navigateAway is true */}
                                     <LogOut size={16} className="me-1" /> Logout
                                 </Button>
                             </>
@@ -336,8 +426,8 @@ const AppNavbar = () => {
 };
 
 
-// --- Page Components ---
-const HomePage = () => { /* No changes needed */
+// --- Page Components (Keep implementations as previously corrected) ---
+const HomePage = () => {
     return (
     <>
         <div className="hero-section">
@@ -351,10 +441,10 @@ const HomePage = () => { /* No changes needed */
             </Container>
         </div>
         <Container className="py-5">
-             <Row className="text-center feature-section">
+             <Row className="text-center feature-section g-4"> {/* Added g-4 for gap */}
                 <Col md={4} className="mb-4">
                      <Card className="h-100 shadow-sm border-0">
-                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Collaboration" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
+                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?q=80&w=1000&auto=format&fit=crop" alt="Collaboration" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
                         <Card.Body>
                             <h3>Connect</h3>
                             <p>Join a vibrant community of professionals and businesses.</p>
@@ -363,7 +453,7 @@ const HomePage = () => { /* No changes needed */
                 </Col>
                 <Col md={4} className="mb-4">
                      <Card className="h-100 shadow-sm border-0">
-                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Teamwork" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
+                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=1000&auto=format&fit=crop" alt="Teamwork" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
                         <Card.Body>
                             <h3>Collaborate</h3>
                             <p>Work together on innovative projects and achieve great results.</p>
@@ -372,7 +462,7 @@ const HomePage = () => { /* No changes needed */
                 </Col>
                 <Col md={4} className="mb-4">
                      <Card className="h-100 shadow-sm border-0">
-                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="Creative Work" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
+                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1000&auto=format&fit=crop" alt="Creative Work" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
                         <Card.Body>
                             <h3>Create</h3>
                             <p>Bring your ideas to life with the help of skilled freelancers.</p>
@@ -385,7 +475,7 @@ const HomePage = () => { /* No changes needed */
     )
 };
 
-const LoginPage = () => { /* No changes needed */
+const LoginPage = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const { login, loading } = useAuth();
@@ -409,7 +499,7 @@ const LoginPage = () => { /* No changes needed */
     );
 };
 
-const RegisterPage = () => { /* No changes needed */
+const RegisterPage = () => {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -430,11 +520,9 @@ const RegisterPage = () => { /* No changes needed */
             if (err.response?.data) {
                 // Extract specific errors from Django REST Framework response
                  const errors = err.response.data;
-                 if (errors.username) errorMsg += `Username: ${errors.username.join(' ')} `;
-                 if (errors.email) errorMsg += `Email: ${errors.email.join(' ')} `;
-                 if (errors.password) errorMsg += `Password: ${errors.password.join(' ')} `;
-                 if (errors.non_field_errors) errorMsg += errors.non_field_errors.join(' ');
-                 // Add other fields if needed
+                 errorMsg += Object.entries(errors)
+                    .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(' ') : messages}`)
+                    .join('; ');
             } else {
                  errorMsg += "An unknown error occurred.";
             }
@@ -454,7 +542,7 @@ const RegisterPage = () => { /* No changes needed */
                         <Form.Group className="mb-3"><Form.Label>Username</Form.Label><Form.Control type="text" value={username} onChange={e => setUsername(e.target.value)} required /></Form.Group>
                         <Form.Group className="mb-3"><Form.Label>Email</Form.Label><Form.Control type="email" value={email} onChange={e => setEmail(e.target.value)} required /></Form.Group>
                         <Form.Group className="mb-3"><Form.Label>Password</Form.Label><Form.Control type="password" value={password} onChange={e => setPassword(e.target.value)} required /></Form.Group>
-                        <Form.Group className="mb-3"><Form.Label>I am a:</Form.Label><div><Form.Check inline label="Freelancer" name="userType" type="radio" value="freelancer" checked={userType === 'freelancer'} onChange={e => setUserType(e.target.value)} /><Form.Check inline label="Client" name="userType" type="radio" value="client" checked={userType === 'client'} onChange={e => setUserType(e.target.value)} /></div></Form.Group>
+                        <Form.Group className="mb-3"><Form.Label>I am a:</Form.Label><div><Form.Check inline label="Freelancer" name="userType" type="radio" value="freelancer" checked={userType === 'freelancer'} onChange={e => setUserType(e.target.value)} id="radio-freelancer"/><Form.Check inline label="Client" name="userType" type="radio" value="client" checked={userType === 'client'} onChange={e => setUserType(e.target.value)} id="radio-client" /></div></Form.Group>
                         <Button variant="primary" type="submit" className="w-100" disabled={loading}>
                              {loading ? <Spinner as="span" animation="border" size="sm" /> : 'Sign Up'}
                         </Button>
@@ -469,7 +557,7 @@ const RegisterPage = () => { /* No changes needed */
 };
 
 // --- Proposal Submission Modal ---
-const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal }) => { // Accept existingProposal
+const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal, onProposalUpdate }) => {
     const [coverLetter, setCoverLetter] = useState('');
     const [proposedRate, setProposedRate] = useState('');
     const [timeAvailable, setTimeAvailable] = useState('');
@@ -477,21 +565,23 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal })
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { axiosInstance } = useAuth();
-    const navigate = useNavigate();
 
-    // Populate form if editing
+    // Populate form if editing or clear if new/modal reopens
     useEffect(() => {
-        if (existingProposal) {
-            setCoverLetter(existingProposal.cover_letter || '');
-            setProposedRate(existingProposal.proposed_rate || '');
-            setTimeAvailable(existingProposal.time_available || '');
-            setAdditionalInfo(existingProposal.additional_info || '');
-        } else {
-             // Reset form if creating new
-            setCoverLetter('');
-            setProposedRate('');
-            setTimeAvailable('');
-            setAdditionalInfo('');
+        if (show) { // Only run when modal is shown
+            if (existingProposal) {
+                setCoverLetter(existingProposal.cover_letter || '');
+                setProposedRate(existingProposal.proposed_rate || '');
+                setTimeAvailable(existingProposal.time_available || '');
+                setAdditionalInfo(existingProposal.additional_info || '');
+            } else {
+                 // Reset form for new proposal
+                setCoverLetter('');
+                setProposedRate('');
+                setTimeAvailable('');
+                setAdditionalInfo('');
+            }
+            setError(''); // Clear error when modal opens
         }
     }, [existingProposal, show]); // Re-run when modal shows or proposal changes
 
@@ -504,28 +594,43 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal })
         setError('');
         try {
             const payload = {
-                project: projectId,
+                // project field is required by serializer for POST, maybe not for PUT/PATCH if URL includes ID
+                project: projectId, // Ensure projectId is passed for creation
                 cover_letter: coverLetter,
                 proposed_rate: proposedRate,
                 time_available: timeAvailable,
                 additional_info: additionalInfo,
             };
             if (existingProposal) {
-                // Update existing proposal
-                 await axiosInstance.put(`/proposals/${existingProposal.id}/`, payload);
+                // Update existing proposal (PATCH is often preferred over PUT)
+                 await axiosInstance.patch(`/proposals/${existingProposal.id}/`, payload);
                  alert('Proposal updated successfully!');
             } else {
                 // Create new proposal
                  await axiosInstance.post('/proposals/', payload);
                  alert('Proposal submitted successfully!');
             }
-            handleClose();
-            // Maybe refresh data on the page instead of navigating away?
-            // navigate('/dashboard'); // Or wherever appropriate
+            if(onProposalUpdate) onProposalUpdate(); // Call callback to refresh parent data
+            handleClose(); // Close modal on success
         } catch (error) {
-            const errorMsg = error.response?.data?.detail || error.response?.data?.[0] || (existingProposal ? 'Failed to update proposal.' : 'Failed to submit proposal.');
+            const errorData = error.response?.data;
+            // Handle different error structures from DRF
+            let errorMsg = existingProposal ? 'Failed to update proposal.' : 'Failed to submit proposal.';
+            if (typeof errorData === 'string') {
+                errorMsg = errorData;
+            } else if (errorData) {
+                // Try to extract specific field errors or detail
+                const messages = Object.entries(errorData)
+                    .map(([field, fieldErrors]) => `${field}: ${Array.isArray(fieldErrors) ? fieldErrors.join(' ') : fieldErrors}`)
+                    .join('; ');
+                if (messages) {
+                    errorMsg = messages;
+                } else if (errorData.detail) {
+                    errorMsg = errorData.detail;
+                }
+            }
             setError(errorMsg);
-            console.error(errorMsg, error.response?.data || error.message);
+            console.error('Proposal Submit/Update Error:', errorMsg, error.response?.data || error.message);
         } finally {
             setLoading(false);
         }
@@ -540,16 +645,16 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal })
                 {error && <Alert variant="danger">{error}</Alert>}
                 <Form>
                     <Form.Group className="mb-3">
-                        <Form.Label>Cover Letter</Form.Label>
+                        <Form.Label>Cover Letter *</Form.Label>
                         <Form.Control as="textarea" rows={5} value={coverLetter} onChange={e => setCoverLetter(e.target.value)} required/>
                     </Form.Group>
                     <Form.Group className="mb-3">
-                        <Form.Label>Your Proposed Rate (₹)</Form.Label>
-                        <Form.Control type="number" step="0.01" value={proposedRate} onChange={e => setProposedRate(e.target.value)} required/>
+                        <Form.Label>Your Proposed Rate (₹) *</Form.Label>
+                        <Form.Control type="number" step="0.01" value={proposedRate} onChange={e => setProposedRate(e.target.value)} required placeholder="e.g., 3000.00"/>
                     </Form.Group>
                     <Form.Group className="mb-3">
-                        <Form.Label>Time Available (e.g., hours/week, specific days)</Form.Label>
-                        <Form.Control type="text" value={timeAvailable} onChange={e => setTimeAvailable(e.target.value)} />
+                        <Form.Label>Time Available (Optional)</Form.Label>
+                        <Form.Control type="text" value={timeAvailable} onChange={e => setTimeAvailable(e.target.value)} placeholder="e.g., 20 hrs/week, Mon-Fri evenings IST" />
                     </Form.Group>
                     <Form.Group className="mb-3">
                         <Form.Label>Additional Information (Optional)</Form.Label>
@@ -568,7 +673,7 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal })
 };
 
 
-const ProjectListPage = () => { /* Updated with Search */
+const ProjectListPage = () => {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -580,10 +685,9 @@ const ProjectListPage = () => { /* Updated with Search */
             setLoading(true);
             setError('');
             try {
-                // Determine endpoint based on user type
-                // Clients see their projects, Freelancers see open projects
-                 const endpoint = user?.user_type === 'client' ? '/projects/' : '/projects/?status=open';
-                 const params = { search: searchTerm };
+                // Backend queryset filtering handles visibility based on user type/auth status
+                 const endpoint = '/projects/';
+                 const params = searchTerm ? { search: searchTerm } : {};
                 const response = await axiosInstance.get(endpoint, { params });
                 setProjects(response.data.results || response.data); // Handle pagination
             } catch (error) {
@@ -606,14 +710,15 @@ const ProjectListPage = () => { /* Updated with Search */
 
     return (
         <Container className="py-5">
-            <h1 className="mb-4">{user?.user_type === 'client' ? 'My Projects' : 'Open Projects'}</h1>
+             {/* Adjust title dynamically if needed, or keep generic */}
+             <h1 className="mb-4">Browse Projects</h1>
             <InputGroup className="mb-4">
                 <Form.Control
                     placeholder="Search by title, description..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <Button variant="outline-secondary"><Search size={20} /></Button>
+                <Button variant="outline-secondary" id="button-search"><Search size={20} /></Button>
             </InputGroup>
 
             {loading ? <div className="text-center"><Spinner animation="border" /></div> :
@@ -630,12 +735,12 @@ const ProjectListPage = () => { /* Updated with Search */
                                         </Link>
                                     </Card.Title>
                                     <Card.Subtitle className="mb-2 text-muted">
-                                         Posted by: {project.client} {user?.user_type === 'client' && <Badge bg={project.status === 'open' ? 'success' : (project.status === 'in_progress' ? 'warning' : 'secondary')} className="ms-2">{project.status.replace('_', ' ')}</Badge>}
+                                         Client: {project.client} <Badge bg={project.status === 'open' ? 'success' : (project.status === 'in_progress' ? 'warning' : 'secondary')} className="ms-2">{project.status.replace('_', ' ')}</Badge>
                                     </Card.Subtitle>
                                     <Card.Text className="flex-grow-1">
                                         {project.description.length > 100 ? project.description.substring(0, 100) + '...' : project.description}
                                     </Card.Text>
-                                    <div className="d-flex justify-content-between align-items-center mt-auto pt-2">
+                                    <div className="d-flex justify-content-between align-items-center mt-auto pt-2 border-top"> {/* Added border-top */}
                                         <span className="fw-bold fs-5 text-success">₹{project.budget}</span>
                                         <small className="text-muted">{new Date(project.created_at).toLocaleDateString()}</small>
                                     </div>
@@ -644,12 +749,12 @@ const ProjectListPage = () => { /* Updated with Search */
                         </Col>
                     ))}
                  </Row>
-             ) : <Alert variant="info">No projects found.</Alert>}
+             ) : <Alert variant="info">No projects found matching your criteria.</Alert>}
         </Container>
     );
-}
+};
 
-const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client */
+const ProjectDetailPage = () => {
     const { id } = useParams();
     const [project, setProject] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -666,8 +771,8 @@ const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client
                 const response = await axiosInstance.get(`/projects/${id}/`);
                 setProject(response.data);
             } catch (error) {
-                 setError("Failed to fetch project details.");
-                 console.error("Failed to fetch project details:", error);
+                 setError("Failed to fetch project details or you might not have permission.");
+                 console.error("Failed to fetch project details:", error?.response?.data || error?.message || error);
             }
             finally { setLoading(false); }
         };
@@ -691,8 +796,8 @@ const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client
     };
 
     if (loading) return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
-    if (error) return <Container><Alert variant="danger">{error}</Alert></Container>;
-    if (!project) return <Container><Alert variant="warning">Project not found.</Alert></Container>;
+    if (error && !project) return <Container><Alert variant="danger">{error}</Alert></Container>; // Show error only if project failed to load
+    if (!project) return <Container><Alert variant="warning">Project not found or access denied.</Alert></Container>;
 
     const isOwner = user?.username === project.client;
 
@@ -710,6 +815,8 @@ const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client
                         </Button>
                     </div>
                 )}
+                {/* Display specific fetch error related to this page if project loaded but error exists */}
+                {error && <Alert variant="danger">{error}</Alert>}
                 <Row>
                     <Col md={8}>
                         <Card className="shadow-sm mb-4"><Card.Body>
@@ -720,7 +827,7 @@ const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client
                             <h5 className="mt-4">Description</h5>
                             <p style={{ whiteSpace: 'pre-wrap' }}>{project.description}</p>
                         </Card.Body></Card>
-                         {/* Consider showing proposals list here for the client */}
+                         {/* TODO: Consider showing proposals list here for the client owner */}
                     </Col>
                     <Col md={4}>
                         <Card className="shadow-sm sticky-top" style={{ top: '80px' }}> {/* Make details sticky */}
@@ -741,7 +848,7 @@ const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client
                                 <ListGroup.Item>
                                     <strong>Skills Required:</strong>
                                     <div className="mt-1">
-                                        {project.skills_required.length > 0 ? project.skills_required.map(skill => (
+                                        {project.skills_required?.length > 0 ? project.skills_required.map(skill => (
                                             <Badge key={skill.id} pill bg="light" text="dark" className="me-1 mb-1 border">{skill.name}</Badge>
                                         )) : <span className="text-muted">None specified</span>}
                                     </div>
@@ -772,12 +879,12 @@ const ProjectDetailPage = () => { /* Updated with Edit/Delete buttons for client
 };
 
 
-const ProjectCreatePage = () => { /* No major changes needed */
+const ProjectCreatePage = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [budget, setBudget] = useState('');
     const [duration, setDuration] = useState('');
-    const [skills, setSkills] = useState([]);
+    const [skills, setSkills] = useState([]); // Stores selected skill IDs
     const [availableSkills, setAvailableSkills] = useState([]);
     const [timeSlot, setTimeSlot] = useState('');
     const [loading, setLoading] = useState(false); // Loading state
@@ -814,8 +921,13 @@ const ProjectCreatePage = () => { /* No major changes needed */
             alert('Project created successfully!');
             navigate('/dashboard'); // Redirect after creation
         } catch (error) {
-            console.error('Failed to create project:', error.response?.data || error.message);
-            setError(`Failed to create project: ${JSON.stringify(error.response?.data) || 'Server error'}`);
+            const errorData = error.response?.data;
+             let errorMsg = 'Failed to create project.';
+             if (errorData) {
+                 errorMsg += ` ${JSON.stringify(errorData)}`; // Basic error display
+             }
+            console.error('Failed to create project:', errorData || error.message);
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -839,7 +951,7 @@ const ProjectCreatePage = () => { /* No major changes needed */
                             <Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required placeholder="Describe the project requirements, scope, and deliverables..." /></Form.Group>
                             <Row>
                                 <Col md={6}><Form.Group className="mb-3"><Form.Label>Budget (₹)</Form.Label><Form.Control type="number" step="0.01" value={budget} onChange={e => setBudget(e.target.value)} required placeholder="e.g., 5000.00" /></Form.Group></Col>
-                                <Col md={6}><Form.Group className="mb-3"><Form.Label>Estimated Duration (days)</Form.Label><Form.Control type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="e.g., 30" /></Form.Group></Col>
+                                <Col md={6}><Form.Group className="mb-3"><Form.Label>Estimated Duration (days)</Form.Label><Form.Control type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="Optional: e.g., 30" /></Form.Group></Col>
                             </Row>
                             <Form.Group className="mb-3">
                                 <Form.Label>Skills Required (Select multiple)</Form.Label>
@@ -866,18 +978,26 @@ const ProjectCreatePage = () => { /* No major changes needed */
 };
 
 
-const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
+const DashboardPage = () => {
     const { user, axiosInstance } = useAuth();
     const [proposals, setProposals] = useState([]); // Can be proposals *received* or *sent*
     const [projects, setProjects] = useState([]); // For client's projects
     const [loadingProposals, setLoadingProposals] = useState(true);
     const [loadingProjects, setLoadingProjects] = useState(true);
-    const [error, setError] = useState('');
+    const [error, setError] = useState(''); // General dashboard error
+    const [updateError, setUpdateError] = useState(''); // Specific error for status updates
     const navigate = useNavigate();
 
      // State for proposal edit modal
     const [showEditProposalModal, setShowEditProposalModal] = useState(false);
     const [proposalToEdit, setProposalToEdit] = useState(null);
+
+    // Function to construct full image URL
+     const getFullImageUrl = (url) => {
+         if (!url) return null;
+         if (url.startsWith('http') || url.startsWith('blob:')) return url;
+         return `${API_BASE_URL}${url}`;
+     };
 
     const fetchDashboardData = async () => {
         if (!user || !user.profileId) {
@@ -889,25 +1009,26 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
         setLoadingProposals(true);
         setLoadingProjects(true);
         setError('');
+        setUpdateError(''); // Clear previous update errors on refresh
         try {
             // Fetch based on user type
             if (user.user_type === 'client') {
                  // Clients: Fetch proposals for their projects & their projects list
                  const [proposalsRes, projectsRes] = await Promise.all([
-                     axiosInstance.get('/proposals/'), // Queryset filtered by backend view
-                     axiosInstance.get(`/projects/?client=${user.profileId}`) // Explicitly filter projects
+                     axiosInstance.get('/proposals/'), // Queryset filtered by backend view based on project client
+                     axiosInstance.get(`/projects/`) // Queryset filtered by backend view based on client=user
                  ]);
                 setProposals(proposalsRes.data.results || proposalsRes.data);
                 setProjects(projectsRes.data.results || projectsRes.data);
             } else if (user.user_type === 'freelancer') {
                 // Freelancers: Fetch proposals they submitted
-                const proposalsRes = await axiosInstance.get('/proposals/'); // Queryset filtered by backend view
+                const proposalsRes = await axiosInstance.get('/proposals/'); // Queryset filtered by backend view based on freelancer=user
                 setProposals(proposalsRes.data.results || proposalsRes.data);
-                setLoadingProjects(false); // No projects needed for freelancer main dash
+                setLoadingProjects(false); // No projects needed for freelancer main dash display
             }
         } catch (error) {
             setError("Failed to fetch dashboard data.");
-            console.error("Dashboard fetch error:", error);
+            console.error("Dashboard fetch error:", error?.response?.data || error?.message || error);
         } finally {
             setLoadingProposals(false);
             setLoadingProjects(false); // Ensure this is always set
@@ -920,13 +1041,22 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
 
 
     const handleUpdateStatus = async (id, status) => {
+        setUpdateError(''); // Clear previous update error
         try {
-            await axiosInstance.patch(`/proposals/${id}/update_status/`, { status });
+             // Correct endpoint for the custom action
+            await axiosInstance.patch(`/proposals/${id}/update-status/`, { status });
             // Refresh proposals after update
             fetchDashboardData(); // Refetch all dashboard data
         } catch (error) {
-            console.error('Failed to update proposal status:', error.response?.data || error.message);
-            alert(`Failed to update status: ${error.response?.data?.detail || 'Server error'}`);
+             const errorData = error.response?.data;
+             // Extract detailed error message
+             const errorMsg = typeof errorData === 'string' ? errorData :
+                              errorData?.detail ||
+                              (errorData && Object.values(errorData).flat().join(' ')) || // Flatten errors
+                              'Failed to update proposal status.';
+            setUpdateError(`Error updating proposal #${id}: ${errorMsg}`); // Set specific error message
+            console.error('Failed to update proposal status:', errorMsg, error.response?.data || error.message);
+            // Optionally: alert(`Failed to update status: ${errorMsg}`);
         }
     };
 
@@ -943,8 +1073,9 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
                 alert('Proposal deleted successfully.');
                 fetchDashboardData(); // Refresh list
             } catch (error) {
-                console.error('Failed to delete proposal:', error.response?.data || error.message);
-                alert(`Failed to delete proposal: ${error.response?.data?.detail || 'Server error'}`);
+                const errorMsg = error.response?.data?.detail || 'Failed to delete proposal.';
+                console.error('Failed to delete proposal:', errorMsg, error.response?.data || error.message);
+                alert(`Failed to delete proposal: ${errorMsg}`);
             }
         }
     };
@@ -952,7 +1083,7 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
      const handleCloseEditModal = () => {
          setShowEditProposalModal(false);
          setProposalToEdit(null);
-         fetchDashboardData(); // Refresh data when modal closes
+         fetchDashboardData(); // Refresh data when modal closes, in case changes were made
      };
 
     // --- Project Delete Handler (for Client) ---
@@ -963,8 +1094,9 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
                 alert('Project deleted successfully.');
                 fetchDashboardData(); // Refresh project list
             } catch (error) {
-                 console.error('Failed to delete project:', error.response?.data || error.message);
-                alert(`Failed to delete project: ${error.response?.data?.detail || 'Server error'}`);
+                 const errorMsg = error.response?.data?.detail || 'Failed to delete project.';
+                 console.error('Failed to delete project:', errorMsg, error.response?.data || error.message);
+                alert(`Failed to delete project: ${errorMsg}`);
             }
         }
     };
@@ -977,68 +1109,74 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
 
     const renderClientDashboard = () => (
         <>
+             {/* Display proposal update errors prominently */}
+             {updateError && <Alert variant="danger" onClose={() => setUpdateError('')} dismissible>{updateError}</Alert>}
+
             {/* Proposals Received */}
-            <Card className="mb-4">
+            <Card className="mb-4 shadow-sm">
                 <Card.Header as="h5">Proposals Received</Card.Header>
-                {loadingProposals ? <Card.Body><Spinner size="sm"/></Card.Body> :
-                 error ? <Card.Body><Alert variant="danger">{error}</Alert></Card.Body> :
+                {loadingProposals ? <Card.Body className="text-center"><Spinner size="sm"/></Card.Body> :
+                 error && !updateError ? <Card.Body><Alert variant="danger">{error}</Alert></Card.Body> : // Show general error only if no update error
                  proposals.length > 0 ? (
                     <ListGroup variant="flush">
                         {proposals.map(p => (
-                            <ListGroup.Item key={p.id}>
-                                <Row className="align-items-center">
-                                    <Col md={8}>
-                                         Proposal from <strong>{p.freelancer}</strong> for <Link to={`/project/${p.project}`}>"{p.project_title}"</Link>
-                                         <br/>Rate: <strong>₹{p.proposed_rate}</strong> | Status: <Badge bg={p.status === 'pending' ? 'warning' : (p.status === 'accepted' ? 'success' : 'danger')}>{p.status}</Badge>
+                            <ListGroup.Item key={p.id} className="px-3 py-2">
+                                <Row className="align-items-center g-2"> {/* Use g-2 for smaller gap */}
+                                    <Col md={7}>
+                                         Proposal from <strong>{p.freelancer}</strong> for <Link to={`/project/${p.project}`} title={p.project_title}>"{p.project_title.length > 30 ? p.project_title.substring(0, 30)+'...' : p.project_title}"</Link>
+                                         <br/><small className="text-muted">Rate: ₹{p.proposed_rate}</small>
                                     </Col>
-                                    <Col md={4} className="text-md-end mt-2 mt-md-0">
+                                     <Col md={2} className="text-md-center">
+                                          <Badge bg={p.status === 'pending' ? 'warning' : (p.status === 'accepted' ? 'success' : 'danger')}>{p.status}</Badge>
+                                    </Col>
+                                    <Col md={3} className="text-md-end">
                                          {p.status === 'pending' && (
-                                            <>
-                                                <Button variant="success" size="sm" className="me-2 mb-1" onClick={() => handleUpdateStatus(p.id, 'accepted')} title="Accept Proposal">
+                                            <div className="d-flex justify-content-end justify-content-md-end gap-1"> {/* Flex layout for buttons */}
+                                                <Button variant="success" size="sm" onClick={() => handleUpdateStatus(p.id, 'accepted')} title="Accept Proposal">
                                                     <Check size={16} /> <span className="d-none d-lg-inline">Accept</span>
                                                 </Button>
-                                                <Button variant="danger" size="sm" className="mb-1" onClick={() => handleUpdateStatus(p.id, 'rejected')} title="Reject Proposal">
+                                                <Button variant="danger" size="sm" onClick={() => handleUpdateStatus(p.id, 'rejected')} title="Reject Proposal">
                                                     <X size={16} /> <span className="d-none d-lg-inline">Reject</span>
                                                 </Button>
-                                            </>
+                                            </div>
                                          )}
-                                          {p.status === 'accepted' && <Badge bg="success">Accepted</Badge>}
-                                          {p.status === 'rejected' && <Badge bg="danger">Rejected</Badge>}
                                     </Col>
                                 </Row>
                             </ListGroup.Item>
                         ))}
                     </ListGroup>
-                 ) : <Card.Body><p className="text-muted">No proposals received yet.</p></Card.Body>
+                 ) : <Card.Body><p className="text-muted mb-0">No proposals received yet.</p></Card.Body>
                 }
             </Card>
 
             {/* My Projects */}
-            <Card>
+            <Card className="shadow-sm">
                  <Card.Header as="h5">My Posted Projects</Card.Header>
-                 {loadingProjects ? <Card.Body><Spinner size="sm"/></Card.Body> :
+                 {loadingProjects ? <Card.Body className="text-center"><Spinner size="sm"/></Card.Body> :
                   error ? <Card.Body><Alert variant="danger">{error}</Alert></Card.Body> :
                   projects.length > 0 ? (
                      <ListGroup variant="flush">
                         {projects.map(proj => (
-                            <ListGroup.Item key={proj.id}>
-                                <Row className="align-items-center">
-                                     <Col md={8}>
+                            <ListGroup.Item key={proj.id} className="px-3 py-2">
+                                <Row className="align-items-center g-2">
+                                     <Col md={7}>
                                         <Link to={`/project/${proj.id}`}>{proj.title}</Link> <Badge bg={proj.status === 'open' ? 'success' : (proj.status === 'in_progress' ? 'warning' : 'secondary')} className="ms-2">{proj.status.replace('_', ' ')}</Badge>
                                     </Col>
-                                     <Col md={4} className="text-md-end mt-2 mt-md-0">
-                                        <Button variant="outline-secondary" size="sm" className="me-2 mb-1" as={Link} to={`/project/${proj.id}/edit`} title="Edit Project">
-                                             <Edit size={16} /> <span className="d-none d-lg-inline">Edit</span>
-                                        </Button>
-                                         <Button variant="outline-danger" size="sm" className="mb-1" onClick={() => handleDeleteProject(proj.id)} title="Delete Project">
-                                             <Trash2 size={16} /> <span className="d-none d-lg-inline">Delete</span>
-                                        </Button>
+                                     <Col md={5} className="text-md-end">
+                                        <div className="d-flex justify-content-end justify-content-md-end gap-1">
+                                            <Button variant="outline-secondary" size="sm" as={Link} to={`/project/${proj.id}/edit`} title="Edit Project">
+                                                 <Edit size={16} /> <span className="d-none d-lg-inline">Edit</span>
+                                            </Button>
+                                             <Button variant="outline-danger" size="sm" onClick={() => handleDeleteProject(proj.id)} title="Delete Project">
+                                                 <Trash2 size={16} /> <span className="d-none d-lg-inline">Delete</span>
+                                            </Button>
+                                        </div>
                                     </Col>
                                 </Row>
                             </ListGroup.Item>
                         ))}
                     </ListGroup>
-                 ) : <Card.Body><p className="text-muted">You haven't posted any projects yet.</p></Card.Body>
+                 ) : <Card.Body><p className="text-muted mb-0">You haven't posted any projects yet. <Link to="/project/new">Post one now!</Link></p></Card.Body>
                 }
             </Card>
         </>
@@ -1049,48 +1187,57 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
             switch (status) {
                 case 'accepted': return <Badge bg="success">Accepted</Badge>;
                 case 'rejected': return <Badge bg="danger">Rejected</Badge>;
-                default: return <Badge bg="warning">Pending</Badge>;
+                default: return <Badge bg="warning" text="dark">Pending</Badge>; // Dark text for warning
             }
         };
 
         return (
-            <Card>
+            <Card className="shadow-sm">
                 <Card.Header as="h5">My Submitted Proposals</Card.Header>
-                 {loadingProposals ? <Card.Body><Spinner size="sm"/></Card.Body> :
+                 {loadingProposals ? <Card.Body className="text-center"><Spinner size="sm"/></Card.Body> :
                   error ? <Card.Body><Alert variant="danger">{error}</Alert></Card.Body> :
                  proposals.length > 0 ? (
                     <ListGroup variant="flush">
                         {proposals.map(p => (
-                            <ListGroup.Item key={p.id}>
-                                 <Row className="align-items-center">
-                                    <Col md={8}>
-                                        Proposal for <Link to={`/project/${p.project}`}>"{p.project_title}"</Link>
+                            <ListGroup.Item key={p.id} className="px-3 py-2">
+                                 <Row className="align-items-center g-2">
+                                    <Col md={7}>
+                                        Proposal for <Link to={`/project/${p.project}`} title={p.project_title}>"{p.project_title.length > 40 ? p.project_title.substring(0, 40)+'...' : p.project_title}"</Link>
                                     </Col>
-                                     <Col md={2} className="text-md-center mt-2 mt-md-0">
+                                     <Col md={2} xs={4} className="text-md-center"> {/* Adjusted column size */}
                                          {getStatusBadge(p.status)}
                                     </Col>
-                                    <Col md={2} className="text-md-end mt-2 mt-md-0">
+                                    <Col md={3} xs={8} className="text-md-end"> {/* Adjusted column size */}
                                         {/* Allow edit/delete only if pending */}
                                         {p.status === 'pending' && (
-                                            <>
-                                                <Button variant="outline-secondary" size="sm" className="me-2 mb-1" onClick={() => handleEditProposal(p)} title="Edit Proposal">
-                                                    <Edit size={16} />
+                                            <div className="d-flex justify-content-end justify-content-md-end gap-1">
+                                                <Button variant="outline-secondary" size="sm" onClick={() => handleEditProposal(p)} title="Edit Proposal">
+                                                    <Edit size={16} /> <span className="d-none d-md-inline">Edit</span>
                                                 </Button>
-                                                <Button variant="outline-danger" size="sm" className="mb-1" onClick={() => handleDeleteProposal(p.id)} title="Delete Proposal">
-                                                    <Trash2 size={16} />
+                                                <Button variant="outline-danger" size="sm" onClick={() => handleDeleteProposal(p.id)} title="Delete Proposal">
+                                                    <Trash2 size={16} /> <span className="d-none d-md-inline">Delete</span>
                                                 </Button>
-                                            </>
+                                            </div>
+                                        )}
+                                        {/* Optionally add 'View Contract' if accepted */}
+                                        {p.status === 'accepted' && (
+                                             <Button variant="outline-info" size="sm" as={Link} to="/contracts">
+                                                 View Contract
+                                             </Button>
                                         )}
                                     </Col>
                                 </Row>
                             </ListGroup.Item>
                         ))}
                     </ListGroup>
-                 ) : <Card.Body><p className="text-muted">You have not submitted any proposals.</p></Card.Body>
+                 ) : <Card.Body><p className="text-muted mb-0">You have not submitted any proposals. <Link to="/projects">Find work!</Link></p></Card.Body>
                 }
             </Card>
         );
     };
+
+     const profilePicUrl = getFullImageUrl(user?.profilePicture) || `https://via.placeholder.com/50/ced4da/6c757d?text=${user?.username?.charAt(0).toUpperCase() || '?'}`;
+
 
     return (
         <Container className="py-5">
@@ -1115,14 +1262,16 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
                     {/* Welcome Card */}
                     <Card className="shadow-sm mb-4">
                         <Card.Body>
-                            <div className="d-flex align-items-center mb-2">
-                                 <Image src={user.profilePicture || `https://via.placeholder.com/50/007bff/FFFFFF?text=${user.username.charAt(0).toUpperCase()}`} roundedCircle style={{ width: '50px', height: '50px', marginRight: '15px', objectFit: 'cover' }} />
+                            <div className="d-flex align-items-center mb-3">
+                                 <Image src={profilePicUrl} roundedCircle style={{ width: '50px', height: '50px', marginRight: '15px', objectFit: 'cover', border: '1px solid #dee2e6' }} />
                                 <div>
                                      <Card.Title className="fs-4 mb-0">Welcome back, {user.username}!</Card.Title>
-                                     <Card.Text className="text-muted">You are logged in as a <Badge bg="info">{user.user_type}</Badge></Card.Text>
+                                     <Card.Text className="text-muted mb-0">Role: <Badge bg="info">{user.user_type}</Badge></Card.Text>
                                 </div>
                             </div>
-                            {user.user_type === 'client' && <Button as={Link} to="/project/new" variant="primary"><PlusCircle size={16} className="me-1"/> Post New Project</Button>}
+                            {/* Actions */}
+                             {user.user_type === 'client' && <Button as={Link} to="/project/new" variant="primary"><PlusCircle size={16} className="me-1"/> Post New Project</Button>}
+                             {user.user_type === 'freelancer' && <Button as={Link} to="/projects" variant="primary"><Search size={16} className="me-1"/> Find Work</Button>}
                         </Card.Body>
                     </Card>
 
@@ -1134,17 +1283,18 @@ const DashboardPage = () => { /* Updated with Edit/Delete proposal buttons */
              <SubmitProposalModal
                 show={showEditProposalModal}
                 handleClose={handleCloseEditModal}
-                projectId={proposalToEdit?.project} // Pass project ID
+                projectId={proposalToEdit?.project} // Pass project ID for context, might not be needed if PUT/PATCH doesn't require it
                 existingProposal={proposalToEdit}
+                onProposalUpdate={fetchDashboardData} // Pass callback to refresh data
             />
         </Container>
     );
-}
+};
 
 // --- Main App Component ---
 function App() {
     return (
-         // Wrap with BrowserRouter if it's not already done in main.jsx
+         // AuthProvider now wraps everything, providing context
         <AuthProvider>
             <div className="d-flex flex-column" style={{ minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
                 <AppNavbar />
@@ -1154,27 +1304,29 @@ function App() {
                         <Route path="/" element={<HomePage />} />
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
-                        <Route path="/projects" element={<ProjectListPage />} /> {/* List accessible to all logged-in */}
-                        <Route path="/project/:id" element={<ProjectDetailPage />} /> {/* Detail accessible to all logged-in */}
-                         <Route path="/review/:projectId" element={<ReviewPage />} /> {/* Reviews accessible */}
 
-
-                        {/* Protected Routes (Implicitly handled by AuthProvider context checks within components) */}
-                        <Route path="/project/new" element={<ProjectCreatePage />} />
-                        <Route path="/project/:id/edit" element={<ProjectEditPage />} /> {/* New Edit Route */}
-                        <Route path="/proposal/:id/edit" element={<ProposalEditPage />} /> {/* New Edit Route */}
+                        {/* Semi-Protected Routes (Require login, content varies by user type) */}
+                        <Route path="/projects" element={<ProjectListPage />} />
+                        <Route path="/project/:id" element={<ProjectDetailPage />} />
+                        <Route path="/review/:projectId" element={<ReviewPage />} />
+                        <Route path="/profile" element={<ProfilePage />} /> {/* Profile page itself handles auth */}
                         <Route path="/dashboard" element={<DashboardPage />} />
-                        <Route path="/profile" element={<ProfilePage />} />
                         <Route path="/contracts" element={<ContractsPage />} />
                         <Route path="/messages" element={<MessagingPage />} />
-                        <Route path="/notifications" element={<NotificationsPage />} /> {/* New Notifications Route */}
+                        <Route path="/notifications" element={<NotificationsPage />} />
 
 
-                        {/* Add 404 Not Found Route later */}
+                        {/* Protected Routes (Usually requires specific role) */}
+                        <Route path="/project/new" element={<ProjectCreatePage />} /> {/* Protected by component logic/redirect */}
+                        <Route path="/project/:id/edit" element={<ProjectEditPage />} /> {/* Protected by component logic/redirect */}
+                        {/* <Route path="/proposal/:id/edit" element={<ProposalEditPage />} /> */} {/* Commented out */}
+
+                        {/* Add 404 Not Found Route */}
+                        <Route path="*" element={<Container className="py-5 text-center"><h2>404 Not Found</h2><p>The page you requested does not exist.</p><Link to="/">Go Home</Link></Container>} />
                     </Routes>
                 </main>
                  {/* Optional Footer */}
-                 <footer className="bg-light text-center text-muted py-3 mt-auto">
+                 <footer className="bg-light text-center text-muted py-3 mt-auto border-top"> {/* Added border-top */}
                     <Container>
                          &copy; {new Date().getFullYear()} TalentLink. All rights reserved.
                     </Container>
@@ -1184,13 +1336,10 @@ function App() {
     );
 }
 
-export default App; // Assuming BrowserRouter is in main.jsx
-//Need to wrap AuthProvider with BrowserRouter if not done elsewhere
-// For standalone testing:
- /*const RootApp = () => (
-     <BrowserRouter>
-         <App />
-     </BrowserRouter>
- );
+// Export App - Assumes BrowserRouter is in main.jsx
+export default App;
 
- export default RootApp;*/
+// If BrowserRouter is NOT in main.jsx, uncomment this:
+// import { BrowserRouter } from 'react-router-dom';
+// const RootApp = () => ( <BrowserRouter> <App /> </BrowserRouter> );
+// export default RootApp;

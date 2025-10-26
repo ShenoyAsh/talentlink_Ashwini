@@ -17,83 +17,79 @@ from rest_framework.exceptions import PermissionDenied, ValidationError # Import
 
 
 # --- Permission Classes ---
+# backend/api/views.py
+# ... (imports remain the same) ...
+
+# --- Permission Classes remain the same ---
 class IsOwnerOrReadOnly(permissions.BasePermission):
-    """
-    Custom permission to only allow owners of an object to edit it.
-    Assumes the model instance has a 'user' or 'profile.user' attribute.
-    """
+    # ... (no changes needed here) ...
     def has_object_permission(self, request, view, obj):
-        # Read permissions are allowed to any request,
-        # so we'll always allow GET, HEAD or OPTIONS requests.
         if request.method in permissions.SAFE_METHODS:
             return True
-
-        # Write permissions are only allowed to the owner.
-        if hasattr(obj, 'user'): # Direct user link (e.g., Profile)
+        if hasattr(obj, 'user'):
              return obj.user == request.user
-        if hasattr(obj, 'profile'): # Link via profile (e.g., PortfolioItem)
+        if hasattr(obj, 'profile'):
              return obj.profile.user == request.user
-        if hasattr(obj, 'client'): # Link via client (e.g., Project)
+        if hasattr(obj, 'client'):
              return obj.client == request.user
-        if hasattr(obj, 'freelancer'): # Link via freelancer (e.g., Proposal)
-             # Allow edit/delete only if status is pending for proposals
+        if hasattr(obj, 'freelancer'):
              if isinstance(obj, Proposal):
                  return obj.freelancer == request.user and obj.status == 'pending'
              return obj.freelancer == request.user
-        if hasattr(obj, 'reviewer'): # Link via reviewer (e.g., Review)
+        if hasattr(obj, 'reviewer'):
              return obj.reviewer == request.user
-
+        if hasattr(obj, 'recipient'): # Added for Notification
+             return obj.recipient == request.user
         return False
 
-
 class IsClient(permissions.BasePermission):
-    def has_permission(self, request, view):
-        # Check profile exists before accessing user_type
+    # ... (no changes needed here) ...
+     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile.user_type == 'client'
 
 class IsFreelancer(permissions.BasePermission):
+    # ... (no changes needed here) ...
     def has_permission(self, request, view):
-         # Check profile exists before accessing user_type
         return request.user and request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile.user_type == 'freelancer'
 
 
-# --- ViewSets & Views ---
-
+# --- RegisterView remains the same ---
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [permissions.AllowAny]
     serializer_class = RegisterSerializer
 
-
+# --- MODIFIED ProfileViewSet ---
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Allow editing only by owner
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
-        # Allow users to view any profile, but restrict list to their own if needed,
-        # or filter based on user type etc. For now, let's allow viewing all.
-        # However, the IsOwnerOrReadOnly permission will prevent modification.
-        return Profile.objects.all()
+        # Only allow users to see/edit their own profile via this viewset
+        if self.request.user.is_authenticated and hasattr(self.request.user, 'profile'):
+            return Profile.objects.filter(user=self.request.user)
+        return Profile.objects.none()
 
-    # Override perform_update/perform_create if needed to ensure user association
     def perform_update(self, serializer):
-         instance = serializer.save()
-         # Additional logic if needed
+        instance = serializer.save()
+        # Handle profile picture upload separately if present in request.FILES
+        if 'profile_picture' in self.request.FILES:
+            instance.profile_picture = self.request.FILES['profile_picture']
+            instance.save()
+# --- End MODIFIED ProfileViewSet ---
 
-# New ViewSet for Portfolio Items
+# --- PortfolioItemViewSet, SkillViewSet, ProjectViewSet remain the same ---
 class PortfolioItemViewSet(viewsets.ModelViewSet):
     serializer_class = PortfolioItemSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
-        # Users should only see/manage their own portfolio items
         if getattr(self.request.user, 'profile', None):
             return PortfolioItem.objects.filter(profile=self.request.user.profile)
-        return PortfolioItem.objects.none() # Return empty if no profile
+        return PortfolioItem.objects.none()
 
     def perform_create(self, serializer):
-        # Associate the portfolio item with the logged-in user's profile
         if not hasattr(self.request.user, 'profile'):
              raise PermissionDenied("User does not have a profile to add portfolio items to.")
         if self.request.user.profile.user_type != 'freelancer':
@@ -104,96 +100,93 @@ class PortfolioItemViewSet(viewsets.ModelViewSet):
 class SkillViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Skill.objects.all()
     serializer_class = SkillSerializer
-    permission_classes = [permissions.AllowAny] # Skills are public
+    permission_classes = [permissions.AllowAny]
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by('-created_at')
     serializer_class = ProjectSerializer
-    # Apply IsOwnerOrReadOnly for update/destroy, IsClient for create
     permission_classes = [permissions.IsAuthenticated]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'skills_required', 'client'] # Allow filtering by client
+    filterset_fields = ['status', 'skills_required', 'client']
     search_fields = ['title', 'description']
     ordering_fields = ['budget', 'created_at']
 
     def get_permissions(self):
         if self.action == 'create':
-            # Only clients can create
             self.permission_classes = [permissions.IsAuthenticated, IsClient]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            # Only the owning client can modify/delete
             self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
         elif self.action in ['list', 'retrieve']:
-             # Any authenticated user can view list/details (filtered queryset applies)
              self.permission_classes = [permissions.IsAuthenticated]
-        else:
-             # Default for other actions (if any added later)
-             self.permission_classes = [permissions.IsAdminUser] # Or restrict further
-        return super().get_permissions()
-
-    def perform_create(self, serializer):
-        # Assign the client automatically
-        serializer.save(client=self.request.user)
-
-    def get_queryset(self):
-        user = self.request.user
-        # Clients see their own projects (all statuses)
-        if user.is_authenticated and hasattr(user, 'profile') and user.profile.user_type == 'client':
-            return self.queryset.filter(client=user)
-        # Freelancers and others see only 'open' projects
-        elif user.is_authenticated:
-            return self.queryset.filter(status='open')
-        # Unauthenticated users see nothing (or adjust if public viewing is desired)
-        return Project.objects.none()
-
-
-class ProposalViewSet(viewsets.ModelViewSet):
-    queryset = Proposal.objects.all()
-    serializer_class = ProposalSerializer
-    permission_classes = [permissions.IsAuthenticated] # Base permission
-
-    def get_permissions(self):
-        if self.action == 'create':
-            self.permission_classes = [permissions.IsAuthenticated, IsFreelancer]
-        elif self.action == 'update_status': # Custom action needs specific permission
-            self.permission_classes = [permissions.IsAuthenticated, IsClient]
-        elif self.action in ['update', 'partial_update', 'destroy']:
-            # Only owner freelancer can modify/delete IF status is 'pending'
-            self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
-        elif self.action in ['list', 'retrieve']:
-            # Owner (freelancer or client involved) can see
-            self.permission_classes = [permissions.IsAuthenticated] # Queryset filters further
         else:
              self.permission_classes = [permissions.IsAdminUser]
         return super().get_permissions()
 
     def perform_create(self, serializer):
-        # Check if project exists and is open
+        serializer.save(client=self.request.user)
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated and hasattr(user, 'profile') and user.profile.user_type == 'client':
+            return self.queryset.filter(client=user)
+        elif user.is_authenticated:
+            # Freelancers should see ALL projects, not just open, if they might have proposals on them
+            # Let's adjust this slightly - show open, or projects they have proposed on
+            if hasattr(user, 'profile') and user.profile.user_type == 'freelancer':
+                proposed_project_ids = Proposal.objects.filter(freelancer=user).values_list('project_id', flat=True)
+                return self.queryset.filter(Q(status='open') | Q(id__in=proposed_project_ids)).distinct()
+            else: # Other authenticated users might just see open ones
+                return self.queryset.filter(status='open')
+        return Project.objects.none()
+
+
+# --- ProposalViewSet: Fix potential permission issue in update_status ---
+class ProposalViewSet(viewsets.ModelViewSet):
+    queryset = Proposal.objects.all()
+    serializer_class = ProposalSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        # --- Action-specific permissions ---
+        if self.action == 'create':
+            self.permission_classes = [permissions.IsAuthenticated, IsFreelancer]
+        elif self.action == 'update_status':
+            # *** IMPORTANT: Make sure the client owning the PROJECT can perform this ***
+            # We'll check object-level permission *inside* the action method.
+            # Base permission here should just be IsAuthenticated or IsClient. Let's use IsAuthenticated.
+            self.permission_classes = [permissions.IsAuthenticated]
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Checks freelancer owner & pending status
+        elif self.action in ['list', 'retrieve']:
+            self.permission_classes = [permissions.IsAuthenticated]
+        else:
+            self.permission_classes = [permissions.IsAdminUser]
+        return super().get_permissions()
+
+    # --- perform_create, perform_update, perform_destroy, get_queryset remain the same ---
+    def perform_create(self, serializer):
         project_id = self.request.data.get('project')
         try:
             project = Project.objects.get(pk=project_id, status='open')
         except Project.DoesNotExist:
             raise ValidationError("Project not found or is not open for proposals.")
-
-        # Check if freelancer already proposed for this project
         if Proposal.objects.filter(project=project, freelancer=self.request.user).exists():
              raise ValidationError("You have already submitted a proposal for this project.")
-
         serializer.save(freelancer=self.request.user, project=project)
 
     def perform_update(self, serializer):
-        # Ensure status isn't changed here, only via update_status action
-        if 'status' in serializer.validated_data and serializer.instance.status != serializer.validated_data['status']:
+         instance = serializer.instance # Get instance before calling super().save()
+         if 'status' in serializer.validated_data and instance.status != serializer.validated_data['status']:
             raise PermissionDenied("Cannot change status directly. Use the update_status action.")
-        # Ensure only pending proposals are edited
-        if serializer.instance.status != 'pending':
+         if instance.status != 'pending':
             raise PermissionDenied("Cannot edit proposals that are not in 'pending' status.")
-        serializer.save()
+         # Pass the instance to save
+         serializer.save()
+
 
     def perform_destroy(self, instance):
-         # Ensure only pending proposals are deleted
          if instance.status != 'pending':
              raise PermissionDenied("Cannot delete proposals that are not in 'pending' status.")
          instance.delete()
@@ -202,60 +195,68 @@ class ProposalViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return Proposal.objects.none()
-
-        # Freelancers see their proposals
         if hasattr(user, 'profile') and user.profile.user_type == 'freelancer':
             return self.queryset.filter(freelancer=user)
-        # Clients see proposals for their projects
         elif hasattr(user, 'profile') and user.profile.user_type == 'client':
             return self.queryset.filter(project__client=user)
-        # Other authenticated users (e.g., admin) might see all or based on roles
-        # if user.is_staff: return self.queryset.all()
-        return Proposal.objects.none() # Default deny for others
+        return Proposal.objects.none()
 
-    @action(detail=True, methods=['patch'], url_path='update-status') # Ensure url_path matches urls.py if needed
+    # --- MODIFIED update_status ---
+    @action(detail=True, methods=['patch'], url_path='update-status', permission_classes=[permissions.IsAuthenticated]) # Keep base permission simple
     def update_status(self, request, pk=None):
-        proposal = self.get_object() # This applies object-level permissions
+        try:
+            proposal = self.get_object() # Fetches based on pk
+        except Proposal.DoesNotExist:
+             return Response({'detail': 'Proposal not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Additional check: only project client can update status
+
+        # *** Explicit Permission Check: Only project client can update ***
         if proposal.project.client != request.user:
              raise PermissionDenied("You are not the client for this project.")
 
         status_val = request.data.get('status')
         if status_val not in ['accepted', 'rejected']:
-            return Response({'detail': 'Invalid status value.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Invalid status value. Must be "accepted" or "rejected".'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Ensure proposal is pending before changing status
         if proposal.status != 'pending':
              return Response({'detail': f'Proposal is already {proposal.status}.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # --- Logic for status change, contract creation, project update, other proposal rejection ---
         original_status = proposal.status # Store before changing
         proposal.status = status_val
         proposal.save()
-        proposal._original_status = original_status # Manually update for signal consistency if needed immediately
+        # Manually update _original_status after save if signals need it immediately
+        # proposal._original_status = original_status
 
         if status_val == 'accepted':
-            # Create contract only if one doesn't exist for this project
-            if not Contract.objects.filter(project=proposal.project).exists():
-                Contract.objects.create(
-                    project=proposal.project,
-                    freelancer=proposal.freelancer,
-                    agreed_rate=proposal.proposed_rate,
-                    start_date=datetime.date.today()
-                    # Add end_date logic if needed based on project duration
-                )
-            # Update project status
-            proposal.project.status = 'in_progress'
-            proposal.project.save()
+            # Ensure atomicity later if needed (database transaction)
+            try:
+                if not Contract.objects.filter(project=proposal.project).exists():
+                    Contract.objects.create(
+                        project=proposal.project,
+                        freelancer=proposal.freelancer,
+                        agreed_rate=proposal.proposed_rate,
+                        start_date=datetime.date.today()
+                    )
+                proposal.project.status = 'in_progress'
+                proposal.project.save()
+                Proposal.objects.filter(project=proposal.project, status='pending').exclude(pk=proposal.pk).update(status='rejected')
+            except Exception as e:
+                 # Handle potential errors during contract creation or project update
+                 # Optionally revert proposal status if needed
+                 # proposal.status = original_status
+                 # proposal.save()
+                 print(f"Error during post-acceptance processing: {e}") # Log the error
+                 return Response({'detail': f'Proposal status updated, but failed to create contract or update project: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Reject other pending proposals for the same project
-            Proposal.objects.filter(project=proposal.project, status='pending').exclude(pk=proposal.pk).update(status='rejected')
 
-        # Signal will handle notification creation post_save
+        # Signal will handle notification creation after save completes
 
         return Response(self.get_serializer(proposal).data)
+    # --- End MODIFIED update_status ---
 
-class ContractViewSet(viewsets.ReadOnlyModelViewSet): # Typically contracts aren't modified/deleted this way
+# --- ContractViewSet, MessageViewSet, ReviewViewSet remain the same ---
+class ContractViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -264,7 +265,6 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet): # Typically contracts aren
         user = self.request.user
         if not user.is_authenticated:
             return Contract.objects.none()
-        # Filter contracts where the user is either the client or the freelancer
         if hasattr(user, 'profile'):
              if user.profile.user_type == 'freelancer':
                  return self.queryset.filter(freelancer=user)
@@ -273,17 +273,15 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet): # Typically contracts aren
         return Contract.objects.none()
 
 class MessageViewSet(viewsets.ModelViewSet):
-    queryset = Message.objects.all().order_by('-timestamp') # Show newest first
+    queryset = Message.objects.all().order_by('-timestamp')
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        # Users can only see messages they sent or received
         return self.queryset.filter(Q(sender=user) | Q(receiver=user))
 
     def perform_create(self, serializer):
-        # Use 'receiver_username' from the request data
         receiver_username = serializer.validated_data.get('receiver_username')
         if not receiver_username:
              raise ValidationError("Receiver username is required.")
@@ -293,30 +291,25 @@ class MessageViewSet(viewsets.ModelViewSet):
                  raise ValidationError("You cannot send a message to yourself.")
         except User.DoesNotExist:
             raise ValidationError(f"Receiver with username '{receiver_username}' not found.")
-
-        # Save with sender and found receiver, removing receiver_username
-        serializer.save(sender=self.request.user, receiver=receiver) # receiver_username is write_only
+        serializer.save(sender=self.request.user, receiver=receiver)
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all().order_by('-created_at')
     serializer_class = ReviewSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Only owner can edit/delete
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
         queryset = Review.objects.all()
-        # Allow filtering by project ID from query params
         project_id = self.request.query_params.get('project')
         if project_id:
              queryset = queryset.filter(project_id=project_id)
-        # Allow users to see reviews related to them (reviewer or reviewee)
-        # return queryset.filter(Q(reviewer=user) | Q(reviewee=user))
-        # Or make reviews public once submitted? Let's keep it filtered for now.
-        if project_id: # If filtering by project, return those
-             return queryset
-        # Otherwise, maybe return reviews where user is reviewer/reviewee?
-        return queryset.filter(Q(reviewer=user) | Q(reviewee=user))
+        elif user.is_authenticated: # Only filter by user if not filtering by project
+             queryset = queryset.filter(Q(reviewer=user) | Q(reviewee=user))
+        else:
+            queryset = Review.objects.none()
+        return queryset
 
 
     def perform_create(self, serializer):
@@ -331,7 +324,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
              raise PermissionDenied("User profile not found.")
 
         reviewee = None
-        # Client reviews the accepted freelancer
         if user_profile.user_type == 'client' and project.client == self.request.user:
             try:
                 accepted_proposal = project.proposals.get(status='accepted')
@@ -339,61 +331,52 @@ class ReviewViewSet(viewsets.ModelViewSet):
             except Proposal.DoesNotExist:
                  raise ValidationError("Cannot review: No accepted proposal found for this project.")
             except Proposal.MultipleObjectsReturned:
-                 # Handle case with multiple accepted proposals if possible, maybe take the latest?
-                 # For simplicity, let's assume only one for now or raise error.
                  raise ValidationError("Consistency error: Multiple accepted proposals found.")
 
-        # Freelancer reviews the client
         elif user_profile.user_type == 'freelancer':
-             # Ensure this freelancer was the one accepted for the project
              try:
                  accepted_proposal = project.proposals.get(status='accepted', freelancer=self.request.user)
                  reviewee = project.client
              except Proposal.DoesNotExist:
                  raise PermissionDenied("You cannot review this project as you were not the accepted freelancer.")
-
         else:
             raise PermissionDenied("You are not authorized to review this project.")
 
         if not reviewee:
              raise ValidationError("Could not determine the reviewee.")
 
-        # Check if reviewer already reviewed this reviewee for this project
         if Review.objects.filter(project=project, reviewer=self.request.user, reviewee=reviewee).exists():
              raise ValidationError("You have already submitted a review for this user on this project.")
 
         serializer.save(reviewer=self.request.user, reviewee=reviewee)
 
-# New ViewSet for Notifications
+# --- NotificationViewSet: Ensure IsOwnerOrReadOnly handles recipient ---
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Add IsOwnerOrReadOnly
 
     def get_queryset(self):
         # Users only see their own notifications
         return Notification.objects.filter(recipient=self.request.user).order_by('-timestamp')
 
-    # Allow users to mark notifications as read/unread
+    # --- mark_read, mark_unread, mark_all_read remain the same ---
     @action(detail=True, methods=['patch'])
     def mark_read(self, request, pk=None):
-        notification = self.get_object() # Checks ownership via queryset
-        if notification.recipient != request.user:
-             raise PermissionDenied("Cannot modify this notification.")
+        notification = self.get_object() # Checks ownership via IsOwnerOrReadOnly
         notification.read = True
         notification.save()
         return Response(self.get_serializer(notification).data)
 
     @action(detail=True, methods=['patch'])
     def mark_unread(self, request, pk=None):
-        notification = self.get_object()
-        if notification.recipient != request.user:
-             raise PermissionDenied("Cannot modify this notification.")
+        notification = self.get_object() # Checks ownership via IsOwnerOrReadOnly
         notification.read = False
         notification.save()
         return Response(self.get_serializer(notification).data)
 
-    # Action to mark all as read
     @action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_read(self, request):
-        Notification.objects.filter(recipient=request.user, read=False).update(read=True)
+        # Don't need get_object here, filter by user directly
+        updated_count = Notification.objects.filter(recipient=request.user, read=False).update(read=True)
+        # return Response({'status': f'{updated_count} notifications marked as read'}, status=status.HTTP_200_OK)
         return Response({'status': 'All notifications marked as read'}, status=status.HTTP_200_OK)
