@@ -14,7 +14,6 @@ import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, 
 // Import new/updated pages and components
 import ProfilePage from './pages/ProfilePage';
 import ContractsPage from './pages/ContractsPage';
-import MessagingPage from './pages/MessagingPage';
 import ReviewPage from './pages/ReviewPage';
 import ProjectEditPage from './pages/ProjectEditPage';
 // import ProposalEditPage from './pages/ProposalEditPage'; // Keep commented if using modal primarily
@@ -127,21 +126,16 @@ const AuthProvider = ({ children }) => {
             // Apply token immediately for the subsequent profile request
             axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newTokens.access}`;
 
-             // Fetch profile immediately using the instance which now has the token header set
-             // Note: Depending on timing, the interceptor might not have run yet for this specific call,
-             // setting the default header above helps ensure it's present.
              const profileResponse = await axiosInstance.get(`/profiles/`);
 
-            // The backend /profiles/ endpoint might return a list or just the user's profile
-            // Adjust finding logic based on what your API returns
-            const profileData = profileResponse.data.results || profileResponse.data; // Handle pagination or direct list/object
+            const profileData = profileResponse.data.results || profileResponse.data; 
             const userProfile = Array.isArray(profileData)
                 ? profileData.find(p => p.user === username)
-                : (profileData && profileData.user === username ? profileData : null); // Handle single object response
+                : (profileData && profileData.user === username ? profileData : null); 
 
 
             if (userProfile) {
-                 // Construct the full profile picture URL here
+               
                  const getFullImageUrl = (url) => {
                      if (!url) return null;
                      if (url.startsWith('http')) return url;
@@ -328,7 +322,7 @@ const NotificationBell = () => {
                     <Offcanvas.Title>Notifications</Offcanvas.Title>
                 </Offcanvas.Header>
                 <Offcanvas.Body>
-                     {/* Show Mark All Read button only if there are unread notifications in the currently displayed list */}
+                    
                      {notifications.some(n => !n.read) && <Button variant="outline-secondary" size="sm" className="mb-2 w-100" onClick={markAllRead}>Mark all as read</Button>}
 
                     {loading ? <div className="text-center"><Spinner animation="border" size="sm" /></div> :
@@ -1291,10 +1285,248 @@ const DashboardPage = () => {
     );
 };
 
+// --- Messaging Page Component (Inline Implementation) ---
+const MessagingPage = () => {
+    const { user, axiosInstance } = useAuth();
+    const [conversations, setConversations] = useState([]);
+    const [activeConv, setActiveConv] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [loadingConvs, setLoadingConvs] = useState(true);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [newMessage, setNewMessage] = useState('');
+    const [editingMessageId, setEditingMessageId] = useState(null);
+    const [editingText, setEditingText] = useState('');
+    const [error, setError] = useState('');
+    const pollingRef = useRef(null);
+
+    // Fetch conversations
+    const fetchConversations = async () => {
+        try {
+            setLoadingConvs(true);
+            const res = await axiosInstance.get('/conversations/'); // expected: list of conversations
+            setConversations(res.data.results || res.data || []);
+        } catch (err) {
+            console.error('Failed to load conversations', err);
+            setError('Could not load conversations.');
+        } finally {
+            setLoadingConvs(false);
+        }
+    };
+
+    // Fetch messages for a conversation
+    const fetchMessages = async (convId) => {
+        if (!convId) return;
+        try {
+            setLoadingMessages(true);
+            const res = await axiosInstance.get(`/conversations/${convId}/messages/`); // expected messages endpoint
+            setMessages(res.data.results || res.data || []);
+            // Mark conversation read if backend supports it
+            try { await axiosInstance.post(`/conversations/${convId}/mark_read/`); } catch(e){ /* non-critical */ }
+        } catch (err) {
+            console.error('Failed to load messages', err);
+            setError('Could not load messages for this conversation.');
+        } finally {
+            setLoadingMessages(false);
+        }
+    };
+
+    // Select conversation
+    const openConversation = (conv) => {
+        setActiveConv(conv);
+        fetchMessages(conv.id);
+    };
+
+    // Send a new message (optimistic)
+    const sendMessage = async () => {
+        if (!activeConv || !newMessage.trim()) return;
+        const tempId = `tmp-${Date.now()}`;
+        const optimistic = {
+            id: tempId,
+            conversation: activeConv.id,
+            sender: user?.username || 'me',
+            content: newMessage,
+            created_at: new Date().toISOString(),
+            sending: true
+        };
+        setMessages(prev => [...prev, optimistic]);
+        setNewMessage('');
+        try {
+            const res = await axiosInstance.post(`/conversations/${activeConv.id}/messages/`, { content: optimistic.content });
+            // Replace temp message with server response
+            setMessages(prev => prev.map(m => m.id === tempId ? (res.data || res.data.results || res.data) : m));
+            // Refresh conversations to reflect last_message / unread counts
+            fetchConversations();
+        } catch (err) {
+            console.error('Send message failed', err);
+            setError('Failed to send message.');
+            // Remove optimistic message or mark failed
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, sending: false, failed: true } : m));
+        }
+    };
+
+    // Edit a message
+    const saveEdit = async (msgId) => {
+        if (!editingText.trim()) return;
+        const prevMessages = messages;
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: editingText } : m));
+        setEditingMessageId(null);
+        setEditingText('');
+        try {
+            await axiosInstance.patch(`/messages/${msgId}/`, { content: editingText });
+        } catch (err) {
+            console.error('Edit message failed', err);
+            setError('Failed to update message.');
+            // rollback on error
+            setMessages(prevMessages);
+        }
+    };
+
+    // Delete a message
+    const deleteMessage = async (msgId) => {
+        if (!window.confirm('Delete this message?')) return;
+        const prevMessages = messages;
+        setMessages(prev => prev.filter(m => m.id !== msgId));
+        try {
+            await axiosInstance.delete(`/messages/${msgId}/`);
+        } catch (err) {
+            console.error('Delete message failed', err);
+            setError('Failed to delete message.');
+            setMessages(prevMessages); // rollback
+        }
+    };
+
+    // Polling: refresh conversations and active conversation messages periodically
+    useEffect(() => {
+        fetchConversations();
+        pollingRef.current = setInterval(() => {
+            fetchConversations();
+            if (activeConv) fetchMessages(activeConv.id);
+        }, 5000);
+        return () => clearInterval(pollingRef.current);
+    }, []); // eslint-disable-line
+
+    // If activeConv changes, fetch messages immediately
+    useEffect(() => {
+        if (activeConv) fetchMessages(activeConv.id);
+    }, [activeConv]); // eslint-disable-line
+
+    if (!user) {
+        return <Container className="py-5 text-center"><Spinner animation="border" /></Container>;
+    }
+
+    return (
+        <Container fluid className="py-4">
+            <Row>
+                <Col md={4} className="mb-3">
+                    <Card className="h-100 shadow-sm">
+                        <Card.Header>
+                            <strong>Conversations</strong>
+                            <div className="float-end"><small className="text-muted">{conversations.length}</small></div>
+                        </Card.Header>
+                        <Card.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                            {loadingConvs ? <div className="text-center"><Spinner size="sm" /></div> :
+                                conversations.length === 0 ? <p className="text-muted">No conversations yet.</p> :
+                                    <ListGroup variant="flush">
+                                        {conversations.map(conv => (
+                                            <ListGroup.Item key={conv.id} action active={activeConv?.id === conv.id} onClick={() => openConversation(conv)} className="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <div className="fw-bold">{conv.name || conv.participants?.filter(p => p !== user.username).join(', ') || `Conversation ${conv.id}`}</div>
+                                                    <small className="text-muted">{conv.last_message_preview || conv.last_message?.content || ''}</small>
+                                                </div>
+                                                <div className="text-end">
+                                                    {conv.unread_count > 0 && <Badge bg="danger">{conv.unread_count}</Badge>}
+                                                    <div><small className="text-muted">{conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : ''}</small></div>
+                                                </div>
+                                            </ListGroup.Item>
+                                        ))}
+                                    </ListGroup>
+                            }
+                        </Card.Body>
+                    </Card>
+                </Col>
+
+                <Col md={8}>
+                    <Card className="h-100 shadow-sm">
+                        <Card.Header>
+                            <div className="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{activeConv ? (activeConv.name || activeConv.participants?.filter(p => p !== user.username).join(', ')) : 'Select a conversation'}</strong>
+                                    <div><small className="text-muted">{activeConv?.topic || ''}</small></div>
+                                </div>
+                                <div>
+                                    {activeConv && <small className="text-muted">{activeConv.unread_count > 0 ? `${activeConv.unread_count} unread` : ''}</small>}
+                                </div>
+                            </div>
+                        </Card.Header>
+
+                        <Card.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                            {activeConv ? (
+                                loadingMessages ? <div className="text-center"><Spinner /></div> :
+                                    <div>
+                                        {messages.length === 0 ? <p className="text-muted">No messages yet. Start the conversation.</p> :
+                                            messages.map(msg => (
+                                                <div key={msg.id} className={`mb-3 ${msg.sender === user.username ? 'text-end' : 'text-start'}`}>
+                                                    <div className={`d-inline-block p-2 rounded ${msg.sender === user.username ? 'bg-primary text-white' : 'bg-light text-dark'}`} style={{ maxWidth: '80%' }}>
+                                                        <div style={{ whiteSpace: 'pre-wrap' }}>
+                                                            {editingMessageId === msg.id ? (
+                                                                <div>
+                                                                    <Form.Control as="textarea" rows={2} value={editingText} onChange={e => setEditingText(e.target.value)} />
+                                                                    <div className="mt-1 d-flex gap-2 justify-content-end">
+                                                                        <Button size="sm" variant="secondary" onClick={() => { setEditingMessageId(null); setEditingText(''); }}>Cancel</Button>
+                                                                        <Button size="sm" variant="primary" onClick={() => saveEdit(msg.id)}>Save</Button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div>{msg.content}</div>
+                                                                    <div className="small text-muted mt-1">{new Date(msg.created_at).toLocaleString()}</div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {/* actions for own messages */}
+                                                    {msg.sender === user.username && editingMessageId !== msg.id && (
+                                                        <div>
+                                                            <Button variant="link" size="sm" onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content); }}><Edit size={14} /></Button>
+                                                            <Button variant="link" size="sm" onClick={() => deleteMessage(msg.id)}><Trash2 size={14} /></Button>
+                                                        </div>
+                                                    )}
+                                                    {msg.sending && <div className="small text-muted">Sending...</div>}
+                                                    {msg.failed && <div className="small text-danger">Failed to send</div>}
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                            ) : (
+                                <div className="text-center text-muted">Select a conversation to view messages.</div>
+                            )}
+                        </Card.Body>
+
+                        {activeConv && (
+                            <Card.Footer>
+                                <Form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
+                                    <InputGroup>
+                                        <Form.Control as="textarea" rows={2} value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Write a message..." />
+                                        <Button variant="primary" onClick={sendMessage}><SendIcon /></Button>
+                                    </InputGroup>
+                                </Form>
+                                {error && <Alert variant="danger" className="mt-2">{error}</Alert>}
+                            </Card.Footer>
+                        )}
+                    </Card>
+                </Col>
+            </Row>
+        </Container>
+    );
+};
+
+// Small inline send icon to avoid additional imports
+const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.964 0.686a.5.5 0 0 0-.56-.426L.79 3.847a.5.5 0 0 0-.06.94l4.47 1.91L9.97 8.03a.5.5 0 0 0 0-.95L5.2 5.9l9.19-3.56a.5.5 0 0 0 0 0 .574-.654z"/></svg>;
+
 // --- Main App Component ---
 function App() {
     return (
-         // AuthProvider now wraps everything, providing context
+        // AuthProvider now wraps everything, providing context
         <AuthProvider>
             <div className="d-flex flex-column" style={{ minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
                 <AppNavbar />
@@ -1305,30 +1537,33 @@ function App() {
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
 
-                        {/* Semi-Protected Routes (Require login, content varies by user type) */}
-                        <Route path="/projects" element={<ProjectListPage />} />
-                        <Route path="/project/:id" element={<ProjectDetailPage />} />
-                        <Route path="/review/:projectId" element={<ReviewPage />} />
-                        <Route path="/profile" element={<ProfilePage />} /> {/* Profile page itself handles auth */}
+                        {/* Protected/Semi-Protected Routes */}
+                        <Route path="/notifications" element={<NotificationsPage />} />
                         <Route path="/dashboard" element={<DashboardPage />} />
+                        <Route path="/profile" element={<ProfilePage />} />
+                        <Route path="/review/:projectId" element={<ReviewPage />} />
+                        <Route path="/project/:id" element={<ProjectDetailPage />} />
+                        <Route path="/projects" element={<ProjectListPage />} />
                         <Route path="/contracts" element={<ContractsPage />} />
                         <Route path="/messages" element={<MessagingPage />} />
-                        <Route path="/notifications" element={<NotificationsPage />} />
+                        <Route path="/project/new" element={<ProjectCreatePage />} />
+                        <Route path="/project/:id/edit" element={<ProjectEditPage />} />
+                        {/* <Route path="/proposal/:id/edit" element={<ProposalEditPage />} /> */}
 
-
-                        {/* Protected Routes (Usually requires specific role) */}
-                        <Route path="/project/new" element={<ProjectCreatePage />} /> {/* Protected by component logic/redirect */}
-                        <Route path="/project/:id/edit" element={<ProjectEditPage />} /> {/* Protected by component logic/redirect */}
-                        {/* <Route path="/proposal/:id/edit" element={<ProposalEditPage />} /> */} {/* Commented out */}
-
-                        {/* Add 404 Not Found Route */}
-                        <Route path="*" element={<Container className="py-5 text-center"><h2>404 Not Found</h2><p>The page you requested does not exist.</p><Link to="/">Go Home</Link></Container>} />
+                        {/* 404 Not Found Route */}
+                        <Route path="*" element={
+                            <Container className="py-5 text-center">
+                                <h2>404 Not Found</h2>
+                                <p>The page you requested does not exist.</p>
+                                <Link to="/">Go Home</Link>
+                            </Container>
+                        } />
                     </Routes>
                 </main>
-                 {/* Optional Footer */}
-                 <footer className="bg-light text-center text-muted py-3 mt-auto border-top"> {/* Added border-top */}
+                {/* Optional Footer */}
+                <footer className="bg-light text-center text-muted py-3 mt-auto border-top">
                     <Container>
-                         &copy; {new Date().getFullYear()} TalentLink. All rights reserved.
+                        &copy; {new Date().getFullYear()} TalentLink. All rights reserved.
                     </Container>
                 </footer>
             </div>
@@ -1336,10 +1571,4 @@ function App() {
     );
 }
 
-// Export App - Assumes BrowserRouter is in main.jsx
 export default App;
-
-// If BrowserRouter is NOT in main.jsx, uncomment this:
-// import { BrowserRouter } from 'react-router-dom';
-// const RootApp = () => ( <BrowserRouter> <App /> </BrowserRouter> );
-// export default RootApp;
