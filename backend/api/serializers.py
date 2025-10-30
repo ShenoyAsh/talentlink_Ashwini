@@ -169,7 +169,19 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ('id', 'sender', 'receiver', 'receiver_username', 'content', 'timestamp')
         read_only_fields = ('id', 'sender', 'receiver', 'timestamp')
 
-    # No custom methods needed if view handles receiver lookup
+    # --- ADDED create METHOD ---
+    def create(self, validated_data):
+        """
+        Create and return a new `Message` instance, removing the temporary
+        'receiver_username' field before calling the model manager.
+        """
+        # Remove receiver_username as it's not a model field
+        validated_data.pop('receiver_username', None)
+
+        # sender and receiver objects are automatically added to validated_data
+        # by DRF when serializer.save(sender=sender, receiver=receiver) is called.
+        message = Message.objects.create(**validated_data)
+        return message
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -199,9 +211,9 @@ class NotificationSerializer(serializers.ModelSerializer):
     """ Read-only serializer for Notification model. """
     recipient = serializers.StringRelatedField(read_only=True)
     # Use PrimaryKeyRelatedField for related objects - more efficient
-    project = serializers.PrimaryKeyRelatedField(read_only=True)
-    proposal = serializers.PrimaryKeyRelatedField(read_only=True)
-    related_message = serializers.PrimaryKeyRelatedField(read_only=True)
+    project = serializers.PrimaryKeyRelatedField(read_only=True, allow_null=True) # Allow null
+    proposal = serializers.PrimaryKeyRelatedField(read_only=True, allow_null=True) # Allow null
+    related_message = serializers.PrimaryKeyRelatedField(read_only=True, allow_null=True) # Allow null
 
     class Meta:
         model = Notification

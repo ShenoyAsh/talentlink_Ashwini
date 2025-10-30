@@ -4,7 +4,10 @@ from django.db import models
 from django.conf import settings
 from django.db.models.signals import post_save, pre_save # Import signals
 from django.dispatch import receiver # Import receiver decorator
+from django.dispatch import receiver # Import receiver decorator
 import django.utils.timezone
+from django.core.mail import send_mail # Import Django's email function
+from django.template.loader import render_to_string
 
 # This is a custom User model that extends Django's default.
 class User(AbstractUser):
@@ -143,61 +146,106 @@ class Notification(models.Model):
         return f"Notification for {self.recipient.username}: {self.message[:30]}"
 
 
+# --- Utility function to send email (placeholder) ---
+def send_notification_email(recipient_email, subject, message_text, message_html=None):
+    """Sends an email notification."""
+    if not recipient_email:
+        print(f"Skipping email for notification '{subject}': Recipient has no email address.")
+        return
+    try:
+        send_mail(
+            subject=subject,
+            message=message_text, # Plain text version
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient_email],
+            html_message=message_html, # Optional HTML version
+            fail_silently=False, # Set to True in production if you don't want errors to stop execution
+        )
+        print(f"Email notification '{subject}' sent/printed for {recipient_email}")
+    except Exception as e:
+        # Log the error in a real application
+        print(f"Error sending email notification '{subject}' to {recipient_email}: {e}")
+
 # --- Signals for Notifications ---
 
 # Use pre_save to capture the state *before* saving
 @receiver(pre_save, sender=Proposal)
 def capture_proposal_original_status(sender, instance, **kwargs):
+    # ... (this function remains the same) ...
     try:
-        # Store original status if it's an existing proposal being updated
         if instance.pk:
             original_instance = sender.objects.get(pk=instance.pk)
             instance._original_status = original_instance.status
         else:
             instance._original_status = 'pending' # Default for new proposals
     except sender.DoesNotExist:
-        # Handle case where the object might be deleted between check and fetch
         instance._original_status = 'pending'
 
 
 @receiver(post_save, sender=Proposal)
 def create_proposal_status_notification(sender, instance, created, **kwargs):
+    recipient = None
+    subject = ""
+    message = ""
+    send_email_flag = False
+
     # Check if the status has changed from its original state before saving
     if not created and instance.status != instance._original_status:
+        recipient = instance.freelancer
+        project_title = instance.project.title
         if instance.status == 'accepted':
-            message = f"Your proposal for '{instance.project.title}' has been accepted!"
-            recipient = instance.freelancer
+            subject = f"Proposal Accepted: {project_title}"
+            message = f"Congratulations! Your proposal for the project '{project_title}' has been accepted."
+            send_email_flag = True
         elif instance.status == 'rejected':
-            message = f"Your proposal for '{instance.project.title}' has been rejected."
-            recipient = instance.freelancer
-        else:
-            # Handle other status changes if needed, or ignore
-            return
+            subject = f"Proposal Update: {project_title}"
+            message = f"Regarding your proposal for '{project_title}', the client has chosen another direction. Thank you for your interest."
+            send_email_flag = True
 
+    # Notify the client when a *new* proposal is submitted
+    elif created:
+         recipient = instance.project.client
+         project_title = instance.project.title
+         freelancer_name = instance.freelancer.username
+         subject = f"New Proposal Received: {project_title}"
+         message = f"You have received a new proposal from {freelancer_name} for your project '{project_title}'. Please review it in your dashboard."
+         send_email_flag = True
+
+    if send_email_flag and recipient:
+        # Create the in-app notification (existing logic)
         Notification.objects.create(
             recipient=recipient,
             message=message,
             project=instance.project,
             proposal=instance
         )
-
-    # Optionally, notify the client when a *new* proposal is submitted
-    if created:
-         message = f"You received a new proposal from {instance.freelancer.username} for your project '{instance.project.title}'."
-         Notification.objects.create(
-             recipient=instance.project.client,
-             message=message,
-             project=instance.project,
-             proposal=instance
-         )
+        # Also send the email notification
+        send_notification_email(
+            recipient_email=recipient.email,
+            subject=subject,
+            message_text=message # Use the same message for plain text email
+            # message_html=render_to_string('emails/notification_template.html', {'message': message}) # Optional: use a template
+        )
 
 
 @receiver(post_save, sender=Message)
 def create_message_notification(sender, instance, created, **kwargs):
     if created:
-        message = f"You have a new message from {instance.sender.username}."
+        recipient = instance.receiver
+        sender_name = instance.sender.username
+        subject = f"New Message from {sender_name}"
+        message = f"You have received a new message from {sender_name}. Check your messages."
+
+        # Create the in-app notification (existing logic)
         Notification.objects.create(
-            recipient=instance.receiver,
+            recipient=recipient,
             message=message,
             related_message=instance # Link the notification to the message
+        )
+        # Also send the email notification
+        send_notification_email(
+            recipient_email=recipient.email,
+            subject=subject,
+            message_text=message
+            # message_html=render_to_string(...) # Optional HTML version
         )

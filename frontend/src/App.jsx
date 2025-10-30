@@ -1,5 +1,5 @@
 // frontend/src/App.jsx
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
 // Correct import if BrowserRouter is used here instead of main.jsx
 // import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 // Use this import if BrowserRouter is in main.jsx (as is standard)
@@ -9,7 +9,7 @@ import './App.css';
 import './index.css'; // Make sure index.css is imported if App.css doesn't cover everything
 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup, Image, Dropdown, Offcanvas } from 'react-bootstrap';
-import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon } from 'lucide-react'; // Added Bell, Edit, Trash2
+import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon, Send, UserPlus } from 'lucide-react'; // Added Bell, Edit, Trash2, Send, UserPlus
 
 // Import new/updated pages and components
 import ProfilePage from './pages/ProfilePage';
@@ -128,14 +128,14 @@ const AuthProvider = ({ children }) => {
 
              const profileResponse = await axiosInstance.get(`/profiles/`);
 
-            const profileData = profileResponse.data.results || profileResponse.data; 
+            const profileData = profileResponse.data.results || profileResponse.data;
             const userProfile = Array.isArray(profileData)
                 ? profileData.find(p => p.user === username)
-                : (profileData && profileData.user === username ? profileData : null); 
+                : (profileData && profileData.user === username ? profileData : null);
 
 
             if (userProfile) {
-               
+
                  const getFullImageUrl = (url) => {
                      if (!url) return null;
                      if (url.startsWith('http')) return url;
@@ -282,7 +282,7 @@ const NotificationBell = () => {
 
      const markAsRead = async (id) => {
          try {
-             await axiosInstance.patch(`/notifications/${id}/mark_read/`);
+             await axiosInstance.patch(`/notifications/${id}/mark-read/`); // Corrected path
              // Optimistically update UI
              setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
              setUnreadCount(prev => Math.max(0, prev - 1)); // Decrement unread count
@@ -294,7 +294,7 @@ const NotificationBell = () => {
 
      const markAllRead = async () => {
          try {
-             await axiosInstance.post(`/notifications/mark-all-read/`);
+             await axiosInstance.post(`/notifications/mark-all-read/`); // Corrected path
              // Optimistically update UI
              setNotifications(prev => prev.map(n => ({ ...n, read: true })));
              setUnreadCount(0); // Set count to 0
@@ -322,7 +322,7 @@ const NotificationBell = () => {
                     <Offcanvas.Title>Notifications</Offcanvas.Title>
                 </Offcanvas.Header>
                 <Offcanvas.Body>
-                    
+
                      {notifications.some(n => !n.read) && <Button variant="outline-secondary" size="sm" className="mb-2 w-100" onClick={markAllRead}>Mark all as read</Button>}
 
                     {loading ? <div className="text-center"><Spinner animation="border" size="sm" /></div> :
@@ -1285,232 +1285,359 @@ const DashboardPage = () => {
     );
 };
 
-// --- Messaging Page Component (Inline Implementation) ---
+// --- CORRECTED Messaging Page Component (Inline Implementation) ---
 const MessagingPage = () => {
     const { user, axiosInstance } = useAuth();
-    const [conversations, setConversations] = useState([]);
-    const [activeConv, setActiveConv] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [loadingConvs, setLoadingConvs] = useState(true);
-    const [loadingMessages, setLoadingMessages] = useState(false);
+    // State: conversations stores messages grouped by partner username
+    const [conversations, setConversations] = useState({}); // { partnerUsername: [message1, message2], ... }
+    const [activeConversationUser, setActiveConversationUser] = useState(null); // Username of the active chat partner
     const [newMessage, setNewMessage] = useState('');
-    const [editingMessageId, setEditingMessageId] = useState(null);
-    const [editingText, setEditingText] = useState('');
-    const [error, setError] = useState('');
-    const pollingRef = useRef(null);
+    const [loading, setLoading] = useState(true); // Initial load state
+    const [isSending, setIsSending] = useState(false); // Sending message state
+    const [fetchError, setFetchError] = useState(''); // Error during fetching
+    const [sendError, setSendError] = useState(''); // Error during sending
+    const [newChatUser, setNewChatUser] = useState(''); // For starting new chat
+    const [newChatError, setNewChatError] = useState(''); // Error for new chat input
 
-    // Fetch conversations
-    const fetchConversations = async () => {
-        try {
-            setLoadingConvs(true);
-            const res = await axiosInstance.get('/conversations/'); // expected: list of conversations
-            setConversations(res.data.results || res.data || []);
-        } catch (err) {
-            console.error('Failed to load conversations', err);
-            setError('Could not load conversations.');
-        } finally {
-            setLoadingConvs(false);
+    const messagesEndRef = useRef(null); // Ref to scroll to the bottom of messages
+    const pollingIntervalRef = useRef(null); // Ref for the polling interval
+
+    // --- Utility: Scroll to bottom ---
+    const scrollToBottom = useCallback(() => {
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 50); // Small delay allows DOM to update
+    }, []);
+
+    // --- Fetch ALL relevant messages and group them ---
+    const fetchAndGroupMessages = useCallback(async (isInitialLoad = false) => {
+        if (!user?.username) return; // Need user context
+
+        if (isInitialLoad) {
+            setLoading(true);
+            setFetchError('');
         }
-    };
+        // Don't set loading or clear error for background polls
 
-    // Fetch messages for a conversation
-    const fetchMessages = async (convId) => {
-        if (!convId) return;
         try {
-            setLoadingMessages(true);
-            const res = await axiosInstance.get(`/conversations/${convId}/messages/`); // expected messages endpoint
-            setMessages(res.data.results || res.data || []);
-            // Mark conversation read if backend supports it
-            try { await axiosInstance.post(`/conversations/${convId}/mark_read/`); } catch(e){ /* non-critical */ }
+            // Fetch all messages involving the current user
+            const response = await axiosInstance.get('/messages/'); // Use the correct endpoint
+            const fetchedMessages = response.data.results || response.data || [];
+
+            // Group messages by conversation partner
+            const groupedConversations = fetchedMessages.reduce((acc, msg) => {
+                const senderUsername = msg.sender;
+                const receiverUsername = msg.receiver;
+
+                // Ensure message has valid sender/receiver and user context exists
+                if (!senderUsername || !receiverUsername || !user?.username) {
+                    console.warn("Skipping message due to missing sender/receiver/user:", msg);
+                    return acc;
+                }
+
+                const partnerUsername = senderUsername === user.username ? receiverUsername : senderUsername;
+
+                if (!acc[partnerUsername]) {
+                    acc[partnerUsername] = [];
+                }
+
+                // Add message only if it's not already present (handles polling overlap)
+                if (!acc[partnerUsername].some(existing => existing.id === msg.id)) {
+                    acc[partnerUsername].push(msg);
+                    // Sort messages within the conversation by timestamp
+                    acc[partnerUsername].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                }
+
+                return acc;
+            }, {}); // Start with empty object
+
+            // Update the conversations state
+            setConversations(groupedConversations);
+
+            // Auto-select the most recent conversation partner on initial load if none selected
+            if (isInitialLoad && !activeConversationUser && Object.keys(groupedConversations).length > 0) {
+                let latestTimestamp = 0;
+                let latestUser = null;
+                Object.entries(groupedConversations).forEach(([username, msgs]) => {
+                    const lastMsg = msgs[msgs.length - 1];
+                    if (lastMsg && new Date(lastMsg.timestamp).getTime() > latestTimestamp) {
+                        latestTimestamp = new Date(lastMsg.timestamp).getTime();
+                        latestUser = username;
+                    }
+                });
+                if (latestUser) {
+                    setActiveConversationUser(latestUser);
+                }
+            }
+
         } catch (err) {
-            console.error('Failed to load messages', err);
-            setError('Could not load messages for this conversation.');
+            if (isInitialLoad) {
+                setFetchError('Failed to fetch messages. Please try again later.');
+            }
+            console.error("Fetch messages error:", err.response?.data || err.message || err);
         } finally {
-            setLoadingMessages(false);
+            if (isInitialLoad) setLoading(false);
         }
-    };
+    }, [user, axiosInstance, activeConversationUser]); // Dependency array
 
-    // Select conversation
-    const openConversation = (conv) => {
-        setActiveConv(conv);
-        fetchMessages(conv.id);
-    };
+    // --- Initial Fetch and Polling Setup ---
+    useEffect(() => {
+        fetchAndGroupMessages(true); // Initial fetch
 
-    // Send a new message (optimistic)
-    const sendMessage = async () => {
-        if (!activeConv || !newMessage.trim()) return;
-        const tempId = `tmp-${Date.now()}`;
-        const optimistic = {
-            id: tempId,
-            conversation: activeConv.id,
-            sender: user?.username || 'me',
-            content: newMessage,
-            created_at: new Date().toISOString(),
-            sending: true
+        // Clear existing interval before setting a new one
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+        }
+
+        // Setup polling
+        pollingIntervalRef.current = setInterval(() => {
+            fetchAndGroupMessages(false); // Background fetch
+        }, 8000); // Poll every 8 seconds
+
+        // Cleanup interval on component unmount
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+            }
         };
-        setMessages(prev => [...prev, optimistic]);
-        setNewMessage('');
-        try {
-            const res = await axiosInstance.post(`/conversations/${activeConv.id}/messages/`, { content: optimistic.content });
-            // Replace temp message with server response
-            setMessages(prev => prev.map(m => m.id === tempId ? (res.data || res.data.results || res.data) : m));
-            // Refresh conversations to reflect last_message / unread counts
-            fetchConversations();
-        } catch (err) {
-            console.error('Send message failed', err);
-            setError('Failed to send message.');
-            // Remove optimistic message or mark failed
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, sending: false, failed: true } : m));
-        }
-    };
+    }, [fetchAndGroupMessages]); // Rerun effect if fetch function changes
 
-    // Edit a message
-    const saveEdit = async (msgId) => {
-        if (!editingText.trim()) return;
-        const prevMessages = messages;
-        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: editingText } : m));
-        setEditingMessageId(null);
-        setEditingText('');
-        try {
-            await axiosInstance.patch(`/messages/${msgId}/`, { content: editingText });
-        } catch (err) {
-            console.error('Edit message failed', err);
-            setError('Failed to update message.');
-            // rollback on error
-            setMessages(prevMessages);
-        }
-    };
-
-    // Delete a message
-    const deleteMessage = async (msgId) => {
-        if (!window.confirm('Delete this message?')) return;
-        const prevMessages = messages;
-        setMessages(prev => prev.filter(m => m.id !== msgId));
-        try {
-            await axiosInstance.delete(`/messages/${msgId}/`);
-        } catch (err) {
-            console.error('Delete message failed', err);
-            setError('Failed to delete message.');
-            setMessages(prevMessages); // rollback
-        }
-    };
-
-    // Polling: refresh conversations and active conversation messages periodically
+    // --- Scroll Effect ---
     useEffect(() => {
-        fetchConversations();
-        pollingRef.current = setInterval(() => {
-            fetchConversations();
-            if (activeConv) fetchMessages(activeConv.id);
-        }, 5000);
-        return () => clearInterval(pollingRef.current);
-    }, []); // eslint-disable-line
+        if (activeConversationUser) { // Only scroll when a chat is active
+            scrollToBottom();
+        }
+    }, [activeConversationUser, conversations, scrollToBottom]); // Trigger scroll on chat switch or new messages
 
-    // If activeConv changes, fetch messages immediately
-    useEffect(() => {
-        if (activeConv) fetchMessages(activeConv.id);
-    }, [activeConv]); // eslint-disable-line
+    // --- Event Handlers ---
+    const handleSelectConversation = (username) => {
+        setActiveConversationUser(username);
+        setSendError(''); // Clear errors when switching
+        setNewChatError('');
+        setNewMessage(''); // Clear input field
+    };
 
-    if (!user) {
-        return <Container className="py-5 text-center"><Spinner animation="border" /></Container>;
+    const handleSendMessage = async (e) => {
+        if (e) e.preventDefault();
+        if (!newMessage.trim() || !activeConversationUser) return;
+
+        setIsSending(true);
+        setSendError('');
+
+        try {
+            // POST to the /messages/ endpoint
+            const response = await axiosInstance.post('/messages/', {
+                receiver_username: activeConversationUser, // Backend expects this field
+                content: newMessage.trim(),
+            });
+            const sentMessage = response.data;
+
+            // Update state: Add the new message to the correct conversation group
+            setConversations(prev => {
+                const updatedConversations = { ...prev };
+                const partner = activeConversationUser; // Use the active user
+
+                if (!updatedConversations[partner]) {
+                    updatedConversations[partner] = [];
+                }
+
+                // Add message if not already added by polling
+                if (!updatedConversations[partner].some(msg => msg.id === sentMessage.id)) {
+                    updatedConversations[partner] = [...updatedConversations[partner], sentMessage];
+                     // Ensure sorting after adding
+                     updatedConversations[partner].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                }
+
+                return updatedConversations;
+            });
+
+            setNewMessage(''); // Clear input field
+            scrollToBottom(); // Scroll after successful send (or optimistic update)
+
+        } catch (err) {
+            const errorData = err.response?.data;
+            let detailedError = "Failed to send message.";
+            if (errorData) {
+                // Extract specific field errors or general detail from backend response
+                if (errorData.receiver_username) detailedError = `Receiver Error: ${errorData.receiver_username.join(', ')}`;
+                else if (errorData.content) detailedError = `Message Error: ${errorData.content.join(', ')}`;
+                else if (errorData.detail) detailedError = errorData.detail;
+                 else if (typeof errorData === 'object' && Object.keys(errorData).length > 0) {
+                     detailedError = Object.entries(errorData).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join('; ');
+                 }
+                else if (typeof errorData === 'string') detailedError = errorData;
+            }
+            setSendError(detailedError);
+            console.error('Send message error:', detailedError, err.response || err);
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleStartNewChat = () => {
+         setNewChatError('');
+         const targetUser = newChatUser.trim();
+         if (!targetUser) {
+             setNewChatError('Please enter a username.');
+             return;
+         }
+         if (targetUser === user.username) {
+             setNewChatError('You cannot chat with yourself.');
+             return;
+         }
+
+         // Activate the conversation locally - it will appear empty until a message is sent/received.
+         // Or, if it already exists from fetched messages, just switch to it.
+         if (!conversations[targetUser]) {
+              setConversations(prev => ({ ...prev, [targetUser]: [] })); // Add empty array
+         }
+         setActiveConversationUser(targetUser);
+         setNewChatUser(''); // Clear input
+     };
+
+
+    // --- Render Logic ---
+    if (loading) {
+        return <Container className="text-center py-5"><Spinner animation="border" role="status"><span className="visually-hidden">Loading messages...</span></Spinner></Container>;
     }
 
+    // Sort partners for display based on the timestamp of the last message
+    const conversationPartners = Object.entries(conversations)
+        .sort(([, msgsA], [, msgsB]) => {
+            const lastMsgTimeA = msgsA.length ? new Date(msgsA[msgsA.length - 1].timestamp).getTime() : 0;
+            const lastMsgTimeB = msgsB.length ? new Date(msgsB[msgsB.length - 1].timestamp).getTime() : 0;
+            return lastMsgTimeB - lastMsgTimeA; // Most recent first
+        })
+        .map(([username]) => username);
+
+    // Get messages for the currently active conversation
+    const activeMessages = activeConversationUser ? conversations[activeConversationUser] || [] : [];
+
+
     return (
-        <Container fluid className="py-4">
-            <Row>
-                <Col md={4} className="mb-3">
-                    <Card className="h-100 shadow-sm">
-                        <Card.Header>
-                            <strong>Conversations</strong>
-                            <div className="float-end"><small className="text-muted">{conversations.length}</small></div>
-                        </Card.Header>
-                        <Card.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                            {loadingConvs ? <div className="text-center"><Spinner size="sm" /></div> :
-                                conversations.length === 0 ? <p className="text-muted">No conversations yet.</p> :
-                                    <ListGroup variant="flush">
-                                        {conversations.map(conv => (
-                                            <ListGroup.Item key={conv.id} action active={activeConv?.id === conv.id} onClick={() => openConversation(conv)} className="d-flex justify-content-between align-items-start">
-                                                <div>
-                                                    <div className="fw-bold">{conv.name || conv.participants?.filter(p => p !== user.username).join(', ') || `Conversation ${conv.id}`}</div>
-                                                    <small className="text-muted">{conv.last_message_preview || conv.last_message?.content || ''}</small>
-                                                </div>
-                                                <div className="text-end">
-                                                    {conv.unread_count > 0 && <Badge bg="danger">{conv.unread_count}</Badge>}
-                                                    <div><small className="text-muted">{conv.updated_at ? new Date(conv.updated_at).toLocaleTimeString() : ''}</small></div>
-                                                </div>
-                                            </ListGroup.Item>
-                                        ))}
-                                    </ListGroup>
-                            }
+        // Use Container fluid for full width, adjust main App layout if needed
+        <Container fluid className="py-3 vh-100 d-flex flex-column">
+            <h1 className="mb-3 h4"><MessageSquare size={20} className="me-2"/>Messages</h1>
+
+            {fetchError && !loading && <Alert variant="warning" className="mb-2">{fetchError}</Alert>}
+
+            <Row className="flex-grow-1" style={{ minHeight: 0 }}> {/* Ensure row fills space */}
+
+                {/* Sidebar */}
+                <Col md={4} lg={3} className="d-flex flex-column mb-3 mb-md-0 h-100">
+                    <Card className="flex-grow-1 d-flex flex-column shadow-sm">
+                        <Card.Header className="fw-bold">Conversations</Card.Header>
+                        {/* Input for new chat */}
+                        <Card.Body className="p-2 border-bottom">
+                            <InputGroup size="sm">
+                                <Form.Control
+                                    type="text"
+                                    placeholder="Enter username to chat"
+                                    value={newChatUser}
+                                    onChange={(e) => setNewChatUser(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleStartNewChat(); }}
+                                />
+                                <Button variant="outline-secondary" onClick={handleStartNewChat}><UserPlus size={16}/></Button>
+                            </InputGroup>
+                            {newChatError && <small className="text-danger d-block mt-1 px-1">{newChatError}</small>}
                         </Card.Body>
+                        {/* Conversation List */}
+                        <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto' }}>
+                            {conversationPartners.length > 0 ? (
+                                conversationPartners.map(partner => (
+                                    <ListGroup.Item
+                                        key={partner}
+                                        action
+                                        active={partner === activeConversationUser}
+                                        onClick={() => handleSelectConversation(partner)}
+                                        className="d-flex justify-content-between align-items-center text-break" // Allow long usernames to wrap
+                                    >
+                                         <span>{partner}</span>
+                                        {/* Optional: Add timestamp or unread indicator here */}
+                                        {conversations[partner]?.length > 0 &&
+                                            <small className="text-muted ms-2 text-nowrap">
+                                                {new Date(conversations[partner][conversations[partner].length - 1].timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                            </small>
+                                        }
+                                    </ListGroup.Item>
+                                ))
+                            ) : (
+                                <ListGroup.Item className="text-muted text-center">No active conversations.</ListGroup.Item>
+                            )}
+                        </ListGroup>
                     </Card>
                 </Col>
 
-                <Col md={8}>
-                    <Card className="h-100 shadow-sm">
+                {/* Main Chat Area */}
+                <Col md={8} lg={9} className="d-flex flex-column h-100">
+                    <Card className="flex-grow-1 d-flex flex-column shadow-sm">
                         <Card.Header>
-                            <div className="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{activeConv ? (activeConv.name || activeConv.participants?.filter(p => p !== user.username).join(', ')) : 'Select a conversation'}</strong>
-                                    <div><small className="text-muted">{activeConv?.topic || ''}</small></div>
-                                </div>
-                                <div>
-                                    {activeConv && <small className="text-muted">{activeConv.unread_count > 0 ? `${activeConv.unread_count} unread` : ''}</small>}
-                                </div>
-                            </div>
+                            {activeConversationUser ? (
+                                <>Chat with <strong>{activeConversationUser}</strong></>
+                            ) : (
+                                'Select or start a conversation'
+                            )}
                         </Card.Header>
 
-                        <Card.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                            {activeConv ? (
-                                loadingMessages ? <div className="text-center"><Spinner /></div> :
-                                    <div>
-                                        {messages.length === 0 ? <p className="text-muted">No messages yet. Start the conversation.</p> :
-                                            messages.map(msg => (
-                                                <div key={msg.id} className={`mb-3 ${msg.sender === user.username ? 'text-end' : 'text-start'}`}>
-                                                    <div className={`d-inline-block p-2 rounded ${msg.sender === user.username ? 'bg-primary text-white' : 'bg-light text-dark'}`} style={{ maxWidth: '80%' }}>
-                                                        <div style={{ whiteSpace: 'pre-wrap' }}>
-                                                            {editingMessageId === msg.id ? (
-                                                                <div>
-                                                                    <Form.Control as="textarea" rows={2} value={editingText} onChange={e => setEditingText(e.target.value)} />
-                                                                    <div className="mt-1 d-flex gap-2 justify-content-end">
-                                                                        <Button size="sm" variant="secondary" onClick={() => { setEditingMessageId(null); setEditingText(''); }}>Cancel</Button>
-                                                                        <Button size="sm" variant="primary" onClick={() => saveEdit(msg.id)}>Save</Button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <>
-                                                                    <div>{msg.content}</div>
-                                                                    <div className="small text-muted mt-1">{new Date(msg.created_at).toLocaleString()}</div>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {/* actions for own messages */}
-                                                    {msg.sender === user.username && editingMessageId !== msg.id && (
-                                                        <div>
-                                                            <Button variant="link" size="sm" onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content); }}><Edit size={14} /></Button>
-                                                            <Button variant="link" size="sm" onClick={() => deleteMessage(msg.id)}><Trash2 size={14} /></Button>
-                                                        </div>
-                                                    )}
-                                                    {msg.sending && <div className="small text-muted">Sending...</div>}
-                                                    {msg.failed && <div className="small text-danger">Failed to send</div>}
-                                                </div>
-                                            ))
-                                        }
-                                    </div>
+                        {/* Message Display Area */}
+                        <Card.Body className="d-flex flex-column" style={{ overflowY: 'auto', flexGrow: 1 }}>
+                            {!activeConversationUser ? (
+                                <p className="text-muted text-center m-auto">Select a conversation from the list or start a new one.</p>
+                            ) : activeMessages.length === 0 ? (
+                                <p className="text-muted text-center m-auto">No messages yet. Send the first one!</p>
                             ) : (
-                                <div className="text-center text-muted">Select a conversation to view messages.</div>
+                                <>
+                                    {activeMessages.map((message, index) => (
+                                        <div
+                                            key={message.id || `msg-${index}`} // Use index as fallback if id is missing temporarily
+                                            className={`mb-2 d-flex ${message.sender === user.username ? 'justify-content-end' : 'justify-content-start'}`}
+                                        >
+                                            <div
+                                                className={`p-2 rounded shadow-sm ${message.sender === user.username ? 'bg-primary text-white' : 'bg-light border'}`}
+                                                style={{ maxWidth: '75%', wordBreak: 'break-word' }}
+                                            >
+                                                 <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
+                                                 <small className={`d-block text-end mt-1 ${message.sender === user.username ? 'text-white-50' : 'text-muted'}`} style={{ fontSize: '0.7em' }}>
+                                                      {new Date(message.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                                  </small>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {/* Scroll target */}
+                                    <div ref={messagesEndRef} style={{ height: '1px' }} />
+                                </>
                             )}
                         </Card.Body>
 
-                        {activeConv && (
-                            <Card.Footer>
-                                <Form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
+                        {/* Input Footer (only if conversation is active) */}
+                        {activeConversationUser && (
+                            <Card.Footer className="bg-light p-2 border-top">
+                                {sendError && <Alert variant="danger" className="mb-2 py-1 px-2 small" onClose={() => setSendError('')} dismissible>{sendError}</Alert>}
+                                <Form onSubmit={handleSendMessage}>
                                     <InputGroup>
-                                        <Form.Control as="textarea" rows={2} value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Write a message..." />
-                                        <Button variant="primary" onClick={sendMessage}><SendIcon /></Button>
+                                        <Form.Control
+                                            as="textarea"
+                                            rows={1} // Start with 1 row, might auto-expand slightly
+                                            placeholder="Type your message..."
+                                            value={newMessage}
+                                            onChange={(e) => setNewMessage(e.target.value)}
+                                            required
+                                            disabled={isSending}
+                                            style={{ resize: 'none', overflowY: 'auto', minHeight: '40px' }} // Min height
+                                             onKeyDown={(e) => {
+                                                 if (e.key === 'Enter' && !e.shiftKey) {
+                                                     e.preventDefault(); // Prevent newline
+                                                     if (!isSending && newMessage.trim()) {
+                                                         handleSendMessage(); // Call send handler
+                                                     }
+                                                 }
+                                             }}
+                                        />
+                                        <Button type="submit" variant="primary" disabled={isSending || !newMessage.trim()}>
+                                            {isSending ? <Spinner as="span" size="sm" animation="border" /> : <Send size={18} />}
+                                        </Button>
                                     </InputGroup>
                                 </Form>
-                                {error && <Alert variant="danger" className="mt-2">{error}</Alert>}
                             </Card.Footer>
                         )}
                     </Card>
@@ -1520,17 +1647,16 @@ const MessagingPage = () => {
     );
 };
 
-// Small inline send icon to avoid additional imports
-const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.964 0.686a.5.5 0 0 0-.56-.426L.79 3.847a.5.5 0 0 0-.06.94l4.47 1.91L9.97 8.03a.5.5 0 0 0 0-.95L5.2 5.9l9.19-3.56a.5.5 0 0 0 0 0 .574-.654z"/></svg>;
 
 // --- Main App Component ---
 function App() {
     return (
         // AuthProvider now wraps everything, providing context
         <AuthProvider>
-            <div className="d-flex flex-column" style={{ minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
+             {/* Removed max-width and padding from here, relies on CSS file now */}
+            <div className="d-flex flex-column" style={{ minHeight: "100vh" }}>
                 <AppNavbar />
-                <main className="flex-grow-1">
+                <main className="flex-grow-1"> {/* main content should grow */}
                     <Routes>
                         {/* Public Routes */}
                         <Route path="/" element={<HomePage />} />
