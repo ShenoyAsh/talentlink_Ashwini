@@ -1,6 +1,6 @@
     # Environment files
     backend_env
-    .env
+    backend/.env
     
     # Python/Django backend
     /backend/venv/
