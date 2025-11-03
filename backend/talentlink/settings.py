@@ -12,16 +12,25 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv  # <-- Import dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# --- ADD THIS ---
+# Load environment variables from .env file (in the backend/ folder)
+env_path = BASE_DIR / '.env'
+load_dotenv(dotenv_path=env_path)
+# --- END ADD ---
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(kq#0t*(5yo*3if&ap9!v+jwb2a-k#dt2)p#&go#1)p#ut7#cf'
+# --- UPDATED ---
+SECRET_KEY = os.environ.get('SECRET_KEY')
+# --- END UPDATE ---
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -146,5 +155,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@talentlink.example.com'
+
+# --- UPDATED EMAIL SETTINGS ---
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')  # Reads from .env
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') # Reads from .env
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER') # Use your email as the from address
