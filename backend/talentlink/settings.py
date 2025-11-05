@@ -12,7 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
-from dotenv import load_dotenv  # <-- Import dotenv
+from dotenv import load_dotenv
+import dj_database_url # Import dj-database-url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,9 +34,19 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # --- END UPDATE ---
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# --- UPDATED FOR PRODUCTION ---
+# Default to False (production) unless explicitly set to 'True' in env
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
+# --- UPDATED FOR PRODUCTION ---
 ALLOWED_HOSTS = []
+# Get allowed hosts from environment variable (e.g., "your-domain.com,localhost,127.0.0.1")
+ALLOWED_HOSTS_ENV = os.environ.get('ALLOWED_HOSTS')
+if ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS.extend(ALLOWED_HOSTS_ENV.split(','))
+else:
+    # Fallback for local development if not set
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -57,6 +68,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
+    # --- ADD Whitenoise middleware for serving static files in production ---
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # ---
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -65,11 +79,23 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# --- UPDATED FOR PRODUCTION ---
+# Read from environment variable, fallback to local
+CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS')
+if CORS_ALLOWED_ORIGINS_ENV:
+    CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_ENV.split(',')
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173", 
+        "http://127.0.0.1:5173",
+    ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173", 
-    "http://127.0.0.1:5173",
-]
+# --- (Optional but recommended) For production SSL ---
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False') == 'True'
+# SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False') == 'True'
+# CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'False') == 'True'
+
 
 # Configure DRF to use JWT
 REST_FRAMEWORK = {
@@ -105,12 +131,22 @@ WSGI_APPLICATION = 'talentlink.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# --- UPDATED FOR PRODUCTION (PostgreSQL) ---
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Use PostgreSQL in production
+    DATABASES = {
+        'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600, ssl_require=True)
     }
-}
+else:
+    # Fallback to SQLite for local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -148,8 +184,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# --- ADD STATIC_ROOT FOR PRODUCTION ---
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# ---
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# --- ADD STATICFILES_STORAGE for Whitenoise ---
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
