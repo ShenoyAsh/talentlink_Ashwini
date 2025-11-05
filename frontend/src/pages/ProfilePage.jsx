@@ -425,7 +425,9 @@ const ProfilePage = () => {
                                                                  <div className="me-auto">
                                                                      <div className="fw-bold">{item.title}</div>
                                                                      <small className="text-muted">{item.description}</small>
-                                                                     {item.link && <><br/><a href={item.link} target="_blank" rel="noopener noreferrer"><LinkIconLucide size={12} /> View Link</a></>}
+                                                                     {/* --- THIS IS THE FIX --- */}
+                                                                     {item.link && <><br/><a href={item.link} target="_blank" rel="noopener noreferrer"><LinkIcon size={12} /> View Link</a></>}
+                                                                     {/* --- END FIX --- */}
                                                                       {item.image && <><br/><Image src={getFullImageUrl(item.image)} thumbnail width={80} className="mt-1" /></>}
                                                                  </div>
                                                                 <div>

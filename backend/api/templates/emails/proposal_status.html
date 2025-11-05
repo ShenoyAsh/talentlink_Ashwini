@@ -1,0 +1,25 @@
+{% extends "emails/notification_base.html" %}
+
+{% block content %}
+<p>Hi {{ recipient_name }},</p>
+
+{% if status == 'accepted' %}
+    <p><strong>Great news!</strong> Your proposal for the project "<strong>{{ project_title }}</strong>" has been accepted by {{ client_name }}.</p>
+    <p>A new contract has been created. You can view the details and get started by logging into your dashboard.</p>
+    <a href="http://localhost:5173/contracts" class="button">View Contract</a>
+
+{% elif status == 'rejected' %}
+    <p>Regarding your proposal for the project "<strong>{{ project_title }}</strong>":</p>
+    <p>We appreciate you taking the time to submit a proposal. The client, {{ client_name }}, has decided to move forward with another option for this project.</p>
+    <p>We encourage you to continue applying for other projects that match your skills.</p>
+    <a href="http://localhost:5173/projects" class="button">Find More Projects</a>
+
+{% elif status == 'new_submission' %}
+    <p>You have received a new proposal for your project "<strong>{{ project_title }}</strong>" from the freelancer <strong>{{ freelancer_name }}</strong>.</p>
+    <p>You can review this proposal and take action from your project dashboard.</p>
+    <a href="http://localhost:5173/dashboard" class="button">Go to Dashboard</a>
+
+{% endif %}
+
+<p style="margin-top: 30px;">Thanks,<br>The TalentLink Team</p>
+{% endblock %}

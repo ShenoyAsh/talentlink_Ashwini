@@ -1,0 +1,13 @@
+Hi {{ recipient_name }},
+
+You have received a new message from {{ sender_name }}.
+
+---
+{{ message_content|truncatewords:50 }}
+---
+
+To reply, please log in to your TalentLink account and visit your messages page.
+View message: http://localhost:5173/messages
+
+Thanks,
+The TalentLink Team
