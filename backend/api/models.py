@@ -54,7 +54,7 @@ class PortfolioItem(models.Model):
 
 class Project(models.Model):
     STATUS_CHOICES = (
-        ('open', 'Open'),
+        ('active', 'Active'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
@@ -66,7 +66,10 @@ class Project(models.Model):
     duration = models.IntegerField(null=True, blank=True, help_text="Duration in days")
     skills_required = models.ManyToManyField(Skill, blank=True)
     time_slot = models.CharField(max_length=100, blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    deadline = models.DateField(null=True, blank=True, help_text="Project completion deadline")
+    reminder_sent = models.BooleanField(default=False, help_text="Whether reminder has been sent")
+    view_count = models.IntegerField(default=0, help_text="Number of times project has been viewed")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -98,12 +101,20 @@ class Proposal(models.Model):
         return f"Proposal for {self.project.title} by {self.freelancer.username}"
 
 class Contract(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    )
     project = models.OneToOneField(Project, on_delete=models.CASCADE)
     freelancer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     agreed_rate = models.DecimalField(max_digits=10, decimal_places=2)
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     is_completed = models.BooleanField(default=False)
+    reminder_sent = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Contract for {self.project.title}"
@@ -249,3 +260,234 @@ def create_message_notification(sender, instance, created, **kwargs):
             message_text=message
             # message_html=render_to_string(...) # Optional HTML version
         )
+
+
+# --- New Models for Additional Features ---
+
+class SavedProject(models.Model):
+    """Model for users to save/bookmark projects for later."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_projects')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='saved_by_users')
+    saved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'project')  # Prevent duplicate saves
+        ordering = ['-saved_at']
+
+    def __str__(self):
+        return f"{self.user.username} saved {self.project.title}"
+
+
+class ActivityLog(models.Model):
+    """Model for tracking user activities across the platform."""
+    ACTION_CHOICES = (
+        ('project_created', 'Project Created'),
+        ('proposal_submitted', 'Proposal Submitted'),
+        ('proposal_accepted', 'Proposal Accepted'),
+        ('proposal_rejected', 'Proposal Rejected'),
+        ('contract_created', 'Contract Created'),
+        ('review_submitted', 'Review Submitted'),
+        ('message_sent', 'Message Sent'),
+        ('profile_updated', 'Profile Updated'),
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='activities')
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    description = models.TextField()
+    related_project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='activities')
+    related_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='related_activities')
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_action_display()}"
+
+
+class ProjectAnalytics(models.Model):
+    """Model for tracking detailed project analytics."""
+    project = models.OneToOneField(Project, on_delete=models.CASCADE, related_name='analytics')
+    total_views = models.IntegerField(default=0)
+    unique_views = models.IntegerField(default=0)
+    proposals_count = models.IntegerField(default=0)
+    saved_count = models.IntegerField(default=0)
+    last_viewed = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Analytics for {self.project.title}"
+
+
+class AchievementBadge(models.Model):
+    """Model for user achievement badges and verification."""
+    BADGE_TYPES = (
+        ('verified', 'Verified Account'),
+        ('top_freelancer', 'Top Freelancer'),
+        ('top_client', 'Top Client'),
+        ('first_project', 'First Project'),
+        ('first_proposal', 'First Proposal'),
+        ('completed_5', 'Completed 5 Projects'),
+        ('completed_10', 'Completed 10 Projects'),
+        ('excellent_review', 'Excellent Reviews'),
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='badges')
+    badge_type = models.CharField(max_length=50, choices=BADGE_TYPES)
+    earned_at = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('user', 'badge_type')  # Prevent duplicate badges
+        ordering = ['-earned_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_badge_type_display()}"
+
+
+# --- Additional Professional Features ---
+
+class Milestone(models.Model):
+    """Model for project milestones."""
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('approved', 'Approved'),
+    )
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='milestones')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Amount for this milestone")
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.project.title}"
+
+
+class ProjectFile(models.Model):
+    """Model for file attachments to projects and proposals."""
+    FILE_TYPE_CHOICES = (
+        ('project_attachment', 'Project Attachment'),
+        ('proposal_attachment', 'Proposal Attachment'),
+        ('deliverable', 'Deliverable'),
+        ('contract_document', 'Contract Document'),
+    )
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='files')
+    proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, null=True, blank=True, related_name='files')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='uploaded_files')
+    file = models.FileField(upload_to='project_files/')
+    file_type = models.CharField(max_length=50, choices=FILE_TYPE_CHOICES, default='project_attachment')
+    description = models.TextField(blank=True, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.file.name} - {self.uploaded_by.username}"
+
+
+class Payment(models.Model):
+    """Model for payment transactions."""
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    )
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='payments')
+    milestone = models.ForeignKey(Milestone, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
+    from_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_payments')
+    to_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    transaction_id = models.CharField(max_length=255, blank=True, null=True)
+    payment_method = models.CharField(max_length=50, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Payment of ₹{self.amount} - {self.project.title}"
+
+
+class Invoice(models.Model):
+    """Model for invoices."""
+    STATUS_CHOICES = (
+        ('draft', 'Draft'),
+        ('sent', 'Sent'),
+        ('paid', 'Paid'),
+        ('overdue', 'Overdue'),
+        ('cancelled', 'Cancelled'),
+    )
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='invoices')
+    milestone = models.ForeignKey(Milestone, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    freelancer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='invoices')
+    client = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_invoices')
+    invoice_number = models.CharField(max_length=50, unique=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    due_date = models.DateField()
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            # Generate invoice number
+            from django.utils import timezone
+            self.invoice_number = f"INV-{timezone.now().strftime('%Y%m%d')}-{self.id or '0000'}"
+        if not self.total_amount:
+            self.total_amount = self.amount + (self.amount * self.tax_rate / 100)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Invoice {self.invoice_number} - ₹{self.total_amount}"
+
+
+class Wallet(models.Model):
+    """Model for user wallet/balance."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wallet')
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Wallet - {self.user.username}: ₹{self.balance}"
+
+
+class Transaction(models.Model):
+    """Model for wallet transactions."""
+    TRANSACTION_TYPE_CHOICES = (
+        ('deposit', 'Deposit'),
+        ('withdrawal', 'Withdrawal'),
+        ('payment', 'Payment'),
+        ('refund', 'Refund'),
+        ('commission', 'Commission'),
+    )
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='transactions')
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True, null=True)
+    related_payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_transaction_type_display()} - ₹{self.amount}"

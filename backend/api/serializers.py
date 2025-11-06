@@ -3,7 +3,8 @@ from rest_framework import serializers
 # Make sure to import models correctly
 from .models import (
     User, Profile, Skill, Project, Proposal, Contract, Message, Review,
-    PortfolioItem, Notification
+    PortfolioItem, Notification, SavedProject, ActivityLog, ProjectAnalytics,
+    AchievementBadge, Milestone, ProjectFile, Payment, Invoice, Wallet, Transaction
 )
 # Import the function to get the currently active User model
 from django.contrib.auth import get_user_model
@@ -121,11 +122,33 @@ class ProjectSerializer(serializers.ModelSerializer):
         queryset=Skill.objects.all(), many=True, write_only=True,
         source='skills_required', required=False # Optional on update/create
     )
+    is_saved = serializers.SerializerMethodField()
+    analytics = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
         fields = '__all__' # Include all fields from the model
-        read_only_fields = ('id', 'client', 'created_at', 'updated_at', 'status')
+        read_only_fields = ('id', 'client', 'created_at', 'updated_at', 'view_count')
+
+    def get_is_saved(self, obj):
+        """Check if the current user has saved this project."""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return SavedProject.objects.filter(user=request.user, project=obj).exists()
+        return False
+
+    def get_analytics(self, obj):
+        """Include analytics data if available."""
+        try:
+            analytics = obj.analytics
+            return {
+                'total_views': analytics.total_views,
+                'unique_views': analytics.unique_views,
+                'proposals_count': analytics.proposals_count,
+                'saved_count': analytics.saved_count
+            }
+        except ProjectAnalytics.DoesNotExist:
+            return None
 
 
 class ProposalSerializer(serializers.ModelSerializer):
@@ -133,7 +156,7 @@ class ProposalSerializer(serializers.ModelSerializer):
     freelancer = serializers.StringRelatedField(read_only=True)
     project_title = serializers.CharField(source='project.title', read_only=True)
     # Allows associating with a project by its ID during creation
-    project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.filter(status='open')) # Only allow proposing on open projects
+    project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.filter(status='active')) # Only allow proposing on active projects
 
     class Meta:
         model = Proposal
@@ -146,13 +169,14 @@ class ProposalSerializer(serializers.ModelSerializer):
 
 
 class ContractSerializer(serializers.ModelSerializer):
-    """ Read-only serializer for Contract model. """
+    """ Serializer for Contract model. """
     project = ProjectSerializer(read_only=True) # Show nested project details
     freelancer = UserSerializer(read_only=True) # Show nested freelancer details
 
     class Meta:
         model = Contract
         fields = '__all__' # Read all fields
+        read_only_fields = ('id', 'project', 'freelancer', 'agreed_rate', 'start_date')
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -228,3 +252,120 @@ class NotificationSerializer(serializers.ModelSerializer):
             'proposal', 'related_message'
             # 'read' status is updated via specific actions in the view
         )
+
+
+class SavedProjectSerializer(serializers.ModelSerializer):
+    """Serializer for SavedProject model."""
+    project = serializers.SerializerMethodField()
+    project_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = SavedProject
+        fields = ('id', 'project', 'project_id', 'saved_at')
+        read_only_fields = ('id', 'saved_at')
+
+    def get_project(self, obj):
+        """Return project data with proper context."""
+        request = self.context.get('request')
+        serializer = ProjectSerializer(obj.project, context={'request': request})
+        return serializer.data
+
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    """Serializer for ActivityLog model."""
+    user = serializers.StringRelatedField(read_only=True)
+    related_project = serializers.StringRelatedField(read_only=True)
+    related_user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = '__all__'
+        read_only_fields = '__all__'
+
+
+class ProjectAnalyticsSerializer(serializers.ModelSerializer):
+    """Serializer for ProjectAnalytics model."""
+    project = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = ProjectAnalytics
+        fields = '__all__'
+        read_only_fields = '__all__'
+
+
+class AchievementBadgeSerializer(serializers.ModelSerializer):
+    """Serializer for AchievementBadge model."""
+    user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = AchievementBadge
+        fields = '__all__'
+        read_only_fields = ('id', 'user', 'earned_at')
+
+
+class MilestoneSerializer(serializers.ModelSerializer):
+    """Serializer for Milestone model."""
+    project = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Milestone
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'updated_at', 'completed_at')
+
+
+class ProjectFileSerializer(serializers.ModelSerializer):
+    """Serializer for ProjectFile model."""
+    uploaded_by = serializers.StringRelatedField(read_only=True)
+    file = serializers.FileField(use_url=True)
+
+    class Meta:
+        model = ProjectFile
+        fields = '__all__'
+        read_only_fields = ('id', 'uploaded_by', 'uploaded_at')
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    """Serializer for Payment model."""
+    project = serializers.StringRelatedField(read_only=True)
+    milestone = serializers.StringRelatedField(read_only=True)
+    from_user = serializers.StringRelatedField(read_only=True)
+    to_user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'completed_at', 'transaction_id')
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    """Serializer for Invoice model."""
+    project = serializers.StringRelatedField(read_only=True)
+    milestone = serializers.StringRelatedField(read_only=True)
+    freelancer = serializers.StringRelatedField(read_only=True)
+    client = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Invoice
+        fields = '__all__'
+        read_only_fields = ('id', 'invoice_number', 'created_at', 'paid_at')
+
+
+class WalletSerializer(serializers.ModelSerializer):
+    """Serializer for Wallet model."""
+    user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Wallet
+        fields = '__all__'
+        read_only_fields = ('id', 'user', 'last_updated')
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    """Serializer for Transaction model."""
+    wallet = WalletSerializer(read_only=True)
+    related_payment = PaymentSerializer(read_only=True)
+
+    class Meta:
+        model = Transaction
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at')

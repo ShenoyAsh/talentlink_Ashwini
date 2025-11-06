@@ -4,7 +4,10 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     RegisterView, ProfileViewSet, SkillViewSet, ProjectViewSet,
     ProposalViewSet, ContractViewSet, MessageViewSet, ReviewViewSet,
-    PortfolioItemViewSet, NotificationViewSet # Added PortfolioItemViewSet, NotificationViewSet
+    PortfolioItemViewSet, NotificationViewSet, SavedProjectViewSet,
+    ActivityLogViewSet, ProjectAnalyticsViewSet, AchievementBadgeViewSet,
+    MilestoneViewSet, ProjectFileViewSet, PaymentViewSet, InvoiceViewSet,
+    WalletViewSet, TransactionViewSet
 )
 
 router = DefaultRouter()
@@ -17,6 +20,16 @@ router.register(r'messages', MessageViewSet, basename='message')
 router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'portfolio-items', PortfolioItemViewSet, basename='portfolioitem') # New
 router.register(r'notifications', NotificationViewSet, basename='notification') # New
+router.register(r'saved-projects', SavedProjectViewSet, basename='savedproject')
+router.register(r'activities', ActivityLogViewSet, basename='activity')
+router.register(r'analytics', ProjectAnalyticsViewSet, basename='analytics')
+router.register(r'badges', AchievementBadgeViewSet, basename='badge')
+router.register(r'milestones', MilestoneViewSet, basename='milestone')
+router.register(r'project-files', ProjectFileViewSet, basename='projectfile')
+router.register(r'payments', PaymentViewSet, basename='payment')
+router.register(r'invoices', InvoiceViewSet, basename='invoice')
+router.register(r'wallet', WalletViewSet, basename='wallet')
+router.register(r'transactions', TransactionViewSet, basename='transaction')
 
 
 urlpatterns = [

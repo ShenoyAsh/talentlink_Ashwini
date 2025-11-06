@@ -35,8 +35,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # --- UPDATED FOR PRODUCTION ---
-# Default to False (production) unless explicitly set to 'True' in env
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+# Default to True for local development, False for production
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # --- UPDATED FOR PRODUCTION ---
 ALLOWED_HOSTS = []
@@ -84,10 +84,25 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS')
 if CORS_ALLOWED_ORIGINS_ENV:
     CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_ENV.split(',')
+elif DEBUG:
+    # In development, allow all localhost ports
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173", 
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    # Allow credentials for development
+    CORS_ALLOW_CREDENTIALS = True
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:5173", 
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ]
 
 # --- (Optional but recommended) For production SSL ---

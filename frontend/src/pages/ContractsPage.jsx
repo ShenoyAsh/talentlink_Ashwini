@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
-import { Container, Card, Spinner, Alert, ListGroup, Badge } from 'react-bootstrap';
+import { Container, Card, Spinner, Alert, ListGroup, Badge, Button, Dropdown, Row, Col } from 'react-bootstrap';
+import { FileText, Edit } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const ContractsPage = () => {
-    const { axiosInstance } = useAuth();
+    const { user, axiosInstance } = useAuth();
     const [contracts, setContracts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -24,6 +26,30 @@ const ContractsPage = () => {
         fetchContracts();
     }, [axiosInstance]);
 
+    const handleStatusUpdate = async (contractId, newStatus) => {
+        try {
+            await axiosInstance.patch(`/contracts/${contractId}/update-status/`, { status: newStatus });
+            // Refresh contracts
+            const response = await axiosInstance.get('/contracts/');
+            setContracts(response.data.results || response.data);
+            alert('Contract status updated successfully!');
+        } catch (err) {
+            alert('Failed to update contract status.');
+            console.error(err);
+        }
+    };
+
+    const getStatusBadge = (status) => {
+        const variants = {
+            active: { bg: 'success', text: 'Active' },
+            in_progress: { bg: 'warning', text: 'In Progress' },
+            completed: { bg: 'primary', text: 'Completed' },
+            cancelled: { bg: 'danger', text: 'Cancelled' }
+        };
+        const config = variants[status] || variants.active;
+        return <Badge bg={config.bg}>{config.text}</Badge>;
+    };
+
     if (loading) {
         return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
     }
@@ -33,22 +59,50 @@ const ContractsPage = () => {
     }
 
     return (
-        <Container className="py-5">
-            <h1>My Contracts</h1>
+        <Container className="py-5 animate-fade-in">
+            <h1 className="mb-4 gradient-text"><FileText className="me-2" />My Contracts</h1>
             {contracts.length > 0 ? (
-                <ListGroup>
-                    {contracts.map(contract => (
-                        <ListGroup.Item key={contract.id}>
-                            <h5>{contract.project.title}</h5>
-                            <p>Freelancer: {contract.freelancer.username}</p>
-                            <p>Agreed Rate: ₹{contract.agreed_rate}</p>
-                            <p>Start Date: {contract.start_date}</p>
-                            <Badge bg={contract.is_completed ? "success" : "warning"}>
-                                {contract.is_completed ? "Completed" : "In Progress"}
-                            </Badge>
-                        </ListGroup.Item>
-                    ))}
-                </ListGroup>
+                <Row className="g-4">
+                    {contracts.map(contract => {
+                        const projectTitle = typeof contract.project === 'object' ? contract.project.title : contract.project;
+                        const freelancerName = typeof contract.freelancer === 'object' ? contract.freelancer.username : contract.freelancer;
+                        return (
+                            <Col md={6} key={contract.id}>
+                                <Card className="shadow-sm h-100">
+                                    <Card.Header className="d-flex justify-content-between align-items-center">
+                                        <strong>{projectTitle}</strong>
+                                        {getStatusBadge(contract.status || (contract.is_completed ? 'completed' : 'active'))}
+                                    </Card.Header>
+                                    <Card.Body>
+                                        <p><strong>Freelancer:</strong> {freelancerName}</p>
+                                        <p><strong>Agreed Rate:</strong> ₹{parseFloat(contract.agreed_rate).toFixed(2)}</p>
+                                        <p><strong>Start Date:</strong> {new Date(contract.start_date).toLocaleDateString()}</p>
+                                        {contract.end_date && (
+                                            <p><strong>End Date:</strong> {new Date(contract.end_date).toLocaleDateString()}</p>
+                                        )}
+                                        <div className="mt-3">
+                                            <Link to={`/project/${typeof contract.project === 'object' ? contract.project.id : contract.project}`} className="btn btn-outline-primary btn-sm me-2">
+                                                View Project
+                                            </Link>
+                                            {(contract.status === 'active' || contract.status === 'in_progress') && (
+                                                <Dropdown>
+                                                    <Dropdown.Toggle variant="outline-secondary" size="sm" id={`status-dropdown-${contract.id}`}>
+                                                        Update Status
+                                                    </Dropdown.Toggle>
+                                                    <Dropdown.Menu>
+                                                        <Dropdown.Item onClick={() => handleStatusUpdate(contract.id, 'active')}>Set as Active</Dropdown.Item>
+                                                        <Dropdown.Item onClick={() => handleStatusUpdate(contract.id, 'in_progress')}>Set as In Progress</Dropdown.Item>
+                                                        <Dropdown.Item onClick={() => handleStatusUpdate(contract.id, 'completed')}>Mark as Completed</Dropdown.Item>
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            )}
+                                        </div>
+                                    </Card.Body>
+                                </Card>
+                            </Col>
+                        );
+                    })}
+                </Row>
             ) : (
                 <Alert variant="info">You have no contracts.</Alert>
             )}

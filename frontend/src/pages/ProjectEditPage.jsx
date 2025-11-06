@@ -18,6 +18,7 @@ const ProjectEditPage = () => {
     const [selectedSkills, setSelectedSkills] = useState([]);
     const [availableSkills, setAvailableSkills] = useState([]);
     const [timeSlot, setTimeSlot] = useState('');
+    const [deadline, setDeadline] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -52,6 +53,7 @@ const ProjectEditPage = () => {
                 setBudget(projectData.budget);
                 setDuration(projectData.duration || '');
                 setTimeSlot(projectData.time_slot || '');
+                setDeadline(projectData.deadline || '');
                 setSelectedSkills(projectData.skills_required.map(skill => skill.id));
                 setAvailableSkills(skillsRes.data.results || skillsRes.data);
 
@@ -83,6 +85,7 @@ const ProjectEditPage = () => {
                 duration: duration || null,
                 skill_ids: selectedSkills, // Send updated skill IDs
                 time_slot: timeSlot,
+                deadline: deadline || null,
                  // Note: status and client shouldn't be updated here generally
             });
             alert('Project updated successfully!');
@@ -132,10 +135,21 @@ const ProjectEditPage = () => {
                                 </Form.Control>
                                 <Form.Text muted>Hold Ctrl (or Cmd) to select multiple.</Form.Text>
                             </Form.Group>
-                            <Form.Group className="mb-3">
-                                <Form.Label>Preferred Time Slot</Form.Label>
-                                <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} />
-                            </Form.Group>
+                            <Row>
+                                <Col md={6}>
+                                    <Form.Group className="mb-3">
+                                        <Form.Label>Preferred Time Slot</Form.Label>
+                                        <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6}>
+                                    <Form.Group className="mb-3">
+                                        <Form.Label>Project Deadline</Form.Label>
+                                        <Form.Control type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+                                        <Form.Text muted>Set deadline for project completion</Form.Text>
+                                    </Form.Group>
+                                </Col>
+                            </Row>
                             <Button type="submit" variant="primary" disabled={loading}>
                                 <Save size={16} className="me-1"/>
                                 {loading ? <Spinner as="span" size="sm" /> : 'Save Changes'}

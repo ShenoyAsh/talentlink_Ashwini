@@ -9,15 +9,19 @@ import './App.css';
 import './index.css'; // Make sure index.css is imported if App.css doesn't cover everything
 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup, Image, Dropdown, Offcanvas } from 'react-bootstrap';
-import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon, Send, UserPlus } from 'lucide-react'; // Added Bell, Edit, Trash2, Send, UserPlus
+import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon, Send, UserPlus, Star, Activity, BarChart3, Filter, TrendingUp, Bookmark, BookmarkCheck, Shield, Trophy, Zap, Wallet as WalletIcon } from 'lucide-react';
 
 // Import new/updated pages and components
 import ProfilePage from './pages/ProfilePage';
 import ContractsPage from './pages/ContractsPage';
 import ReviewPage from './pages/ReviewPage';
 import ProjectEditPage from './pages/ProjectEditPage';
-// import ProposalEditPage from './pages/ProposalEditPage'; // Keep commented if using modal primarily
 import NotificationsPage from './pages/NotificationsPage';
+import WalletPage from './pages/WalletPage';
+import MilestonesPage from './pages/MilestonesPage';
+import InvoicesPage from './pages/InvoicesPage';
+import HomePage from './components/HomePage';
+import './components/HomePage.css';
 
 // Use environment variable or default
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'; // Base URL (for media)
@@ -119,8 +123,16 @@ const AuthProvider = ({ children }) => {
     const login = async (username, password) => {
         setLoading(true);
         try {
+            // Check if backend is accessible first
+            console.log(`Attempting login to: ${API_URL}/token/`);
+            
             const tokenResponse = await axios.post(`${API_URL}/token/`, { username, password });
             const newTokens = tokenResponse.data;
+            
+            if (!newTokens || !newTokens.access) {
+                throw new Error('Invalid response from server: No access token received');
+            }
+            
             setTokens(newTokens);
             localStorage.setItem('authTokens', JSON.stringify(newTokens));
             // Apply token immediately for the subsequent profile request
@@ -160,8 +172,24 @@ const AuthProvider = ({ children }) => {
             }
 
         } catch (error) {
-            console.error("Login failed:", error.response?.data || error.message);
-            alert(`Login failed: ${error.response?.data?.detail || 'Invalid credentials or server error.'}`);
+            console.error("Login failed:", error);
+            let errorMessage = 'Invalid credentials or server error.';
+            
+            if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+                errorMessage = `Cannot connect to backend server. Please ensure the Django server is running at ${API_BASE_URL}`;
+            } else if (error.response?.status === 401) {
+                errorMessage = 'Invalid username or password. Please check your credentials.';
+            } else if (error.response?.status === 404) {
+                errorMessage = `API endpoint not found. Please check if backend is running at ${API_BASE_URL}`;
+            } else if (error.response?.data?.detail) {
+                errorMessage = error.response.data.detail;
+            } else if (error.response?.data) {
+                errorMessage = JSON.stringify(error.response.data);
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            alert(`Login failed: ${errorMessage}`);
             logout(false); // Clear any potentially bad state on login failure
         } finally {
             setLoading(false);
@@ -391,7 +419,13 @@ const AppNavbar = () => {
                     <Nav className="me-auto">
                         <Nav.Link as={Link} to="/projects">Find Work</Nav.Link>
                         {user?.user_type === 'client' && <Nav.Link as={Link} to="/project/new">Post a Project</Nav.Link>}
-                        {/* Add Find Freelancers later? */}
+                        {user && (
+                            <>
+                                <Nav.Link as={Link} to="/saved-projects"><Bookmark size={16} className="me-1" />Saved</Nav.Link>
+                                <Nav.Link as={Link} to="/activities"><Activity size={16} className="me-1" />Activity</Nav.Link>
+                                {user.user_type === 'client' && <Nav.Link as={Link} to="/analytics"><BarChart3 size={16} className="me-1" />Analytics</Nav.Link>}
+                            </>
+                        )}
                     </Nav>
                     <Nav className="align-items-center">
                         {user ? (
@@ -421,53 +455,7 @@ const AppNavbar = () => {
 
 
 // --- Page Components (Keep implementations as previously corrected) ---
-const HomePage = () => {
-    return (
-    <>
-        <div className="hero-section">
-            <Container>
-                <h1 className="display-4 fw-bold mb-3">Find & Hire Experts for any Job</h1>
-                <p className="lead mb-4">Unlock your potential. We connect you with top freelance talent and exciting projects.</p>
-                <div>
-                    <Button as={Link} to="/register" variant="light" size="lg" className="me-2 fw-bold">Get Started</Button>
-                    <Button as={Link} to="/projects" variant="outline-light" size="lg">Browse Projects</Button>
-                </div>
-            </Container>
-        </div>
-        <Container className="py-5">
-             <Row className="text-center feature-section g-4"> {/* Added g-4 for gap */}
-                <Col md={4} className="mb-4">
-                     <Card className="h-100 shadow-sm border-0">
-                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?q=80&w=1000&auto=format&fit=crop" alt="Collaboration" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
-                        <Card.Body>
-                            <h3>Connect</h3>
-                            <p>Join a vibrant community of professionals and businesses.</p>
-                        </Card.Body>
-                    </Card>
-                </Col>
-                <Col md={4} className="mb-4">
-                     <Card className="h-100 shadow-sm border-0">
-                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=1000&auto=format&fit=crop" alt="Teamwork" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
-                        <Card.Body>
-                            <h3>Collaborate</h3>
-                            <p>Work together on innovative projects and achieve great results.</p>
-                        </Card.Body>
-                     </Card>
-                </Col>
-                <Col md={4} className="mb-4">
-                     <Card className="h-100 shadow-sm border-0">
-                         <Card.Img variant="top" src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1000&auto=format&fit=crop" alt="Creative Work" className="feature-image" style={{ height: '200px', objectFit: 'cover' }}/>
-                        <Card.Body>
-                            <h3>Create</h3>
-                            <p>Bring your ideas to life with the help of skilled freelancers.</p>
-                         </Card.Body>
-                    </Card>
-                </Col>
-            </Row>
-        </Container>
-    </>
-    )
-};
+// HomePage is now imported from components/HomePage.jsx
 
 const LoginPage = () => {
     const [username, setUsername] = useState('');
@@ -671,41 +659,71 @@ const ProjectListPage = () => {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const { user, axiosInstance } = useAuth(); // Get user info
+    const [filters, setFilters] = useState({});
+    const [showFilters, setShowFilters] = useState(false);
+    const { user, axiosInstance } = useAuth();
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        const fetchProjects = async () => {
-            setLoading(true);
-            setError('');
-            try {
-                // Backend queryset filtering handles visibility based on user type/auth status
-                 const endpoint = '/projects/';
-                 const params = searchTerm ? { search: searchTerm } : {};
-                const response = await axiosInstance.get(endpoint, { params });
-                setProjects(response.data.results || response.data); // Handle pagination
-            } catch (error) {
-                setError("Failed to fetch projects.");
-                console.error("Failed to fetch projects:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
+    const fetchProjects = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const endpoint = '/projects/';
+            const params = { ...(searchTerm ? { search: searchTerm } : {}) };
+            if (filters.minBudget) params.budget__gte = filters.minBudget;
+            if (filters.maxBudget) params.budget__lte = filters.maxBudget;
+            if (filters.status) params.status = filters.status;
+            if (filters.sortBy) params.ordering = filters.sortBy;
+            const response = await axiosInstance.get(endpoint, { params });
+            setProjects(response.data.results || response.data);
+        } catch (error) {
+            setError("Failed to fetch projects.");
+            console.error("Failed to fetch projects:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [searchTerm, filters, axiosInstance]);
 
-        // Debounce search
+    useEffect(() => {
         const debounceTimer = setTimeout(() => {
             fetchProjects();
-        }, 300); // 300ms delay
+        }, 300);
+        return () => clearTimeout(debounceTimer);
+    }, [fetchProjects]);
 
-        return () => clearTimeout(debounceTimer); // Clear timer on unmount or if searchTerm changes
-
-    }, [searchTerm, user, axiosInstance]); // Re-fetch if search, user, or instance changes
-
+    const handleSaveProject = async (projectId, isSaved) => {
+        if (!user) return;
+            try {
+                if (isSaved) {
+                    // Find the saved project
+                    const savedProjectsRes = await axiosInstance.get('/saved-projects/');
+                    const savedProjects = savedProjectsRes.data.results || savedProjectsRes.data;
+                    const saved = savedProjects.find(sp => {
+                        const projId = typeof sp.project === 'object' ? sp.project.id : sp.project;
+                        return projId === projectId;
+                    });
+                    if (saved) {
+                        await axiosInstance.delete(`/saved-projects/${saved.id}/`);
+                    }
+                } else {
+                    await axiosInstance.post('/saved-projects/', { project_id: projectId });
+                }
+                fetchProjects(); // Refresh to update is_saved status
+            } catch (err) {
+                alert('Failed to save/unsave project.');
+                console.error(err);
+            }
+    };
 
     return (
-        <Container className="py-5">
-             {/* Adjust title dynamically if needed, or keep generic */}
-             <h1 className="mb-4">Browse Projects</h1>
+        <Container className="py-5 animate-fade-in">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h1 className="gradient-text">Browse Projects</h1>
+                <Button variant="outline-primary" onClick={() => setShowFilters(!showFilters)}>
+                    <Filter className="me-2" size={16} /> {showFilters ? 'Hide' : 'Show'} Filters
+                </Button>
+            </div>
+            {showFilters && <AdvancedFilters onFilterChange={setFilters} />}
             <InputGroup className="mb-4">
                 <Form.Control
                     placeholder="Search by title, description..."
@@ -723,21 +741,44 @@ const ProjectListPage = () => {
                         <Col key={project.id}>
                             <Card className="h-100 shadow-sm project-card">
                                 <Card.Body className="d-flex flex-column">
-                                    <Card.Title>
-                                        <Link to={`/project/${project.id}`} className="text-decoration-none stretched-link">
-                                            {project.title}
-                                        </Link>
-                                    </Card.Title>
+                                    <div className="d-flex justify-content-between align-items-start mb-2">
+                                        <Card.Title className="flex-grow-1">
+                                            <Link to={`/project/${project.id}`} className="text-decoration-none">
+                                                {project.title}
+                                            </Link>
+                                        </Card.Title>
+                                        {user?.user_type === 'freelancer' && (
+                                            <Button
+                                                variant="link"
+                                                size="sm"
+                                                className="p-0 ms-2"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    handleSaveProject(project.id, project.is_saved);
+                                                }}
+                                                title={project.is_saved ? 'Unsave project' : 'Save project'}
+                                            >
+                                                {project.is_saved ? <BookmarkCheck size={20} className="text-primary" /> : <Bookmark size={20} />}
+                                            </Button>
+                                        )}
+                                    </div>
                                     <Card.Subtitle className="mb-2 text-muted">
-                                         Client: {project.client} <Badge bg={project.status === 'open' ? 'success' : (project.status === 'in_progress' ? 'warning' : 'secondary')} className="ms-2">{project.status.replace('_', ' ')}</Badge>
+                                         Client: {project.client} <Badge bg={project.status === 'active' ? 'success' : (project.status === 'in_progress' ? 'warning' : project.status === 'completed' ? 'primary' : 'secondary')} className="ms-2">{project.status.replace('_', ' ')}</Badge>
                                     </Card.Subtitle>
                                     <Card.Text className="flex-grow-1">
                                         {project.description.length > 100 ? project.description.substring(0, 100) + '...' : project.description}
                                     </Card.Text>
-                                    <div className="d-flex justify-content-between align-items-center mt-auto pt-2 border-top"> {/* Added border-top */}
+                                    <div className="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
                                         <span className="fw-bold fs-5 text-success">₹{project.budget}</span>
                                         <small className="text-muted">{new Date(project.created_at).toLocaleDateString()}</small>
                                     </div>
+                                    {project.analytics && (
+                                        <div className="mt-2 pt-2 border-top">
+                                            <small className="text-muted">
+                                                <TrendingUp size={14} className="me-1" /> {project.analytics.total_views} views • {project.analytics.proposals_count} proposals
+                                            </small>
+                                        </div>
+                                    )}
                                 </Card.Body>
                             </Card>
                         </Col>
@@ -815,8 +856,46 @@ const ProjectDetailPage = () => {
                     <Col md={8}>
                         <Card className="shadow-sm mb-4"><Card.Body>
                             <Card.Title className="display-6">{project.title}</Card.Title>
-                            <Card.Subtitle className="mb-3 text-muted">
-                                 Posted by {project.client} <Badge bg={project.status === 'open' ? 'success' : (project.status === 'in_progress' ? 'warning' : 'secondary')} className="ms-2">{project.status.replace('_', ' ')}</Badge>
+                            <Card.Subtitle className="mb-3 text-muted d-flex align-items-center justify-content-between">
+                                <div>
+                                    Posted by {project.client} <Badge bg={project.status === 'active' ? 'success' : (project.status === 'in_progress' ? 'warning' : project.status === 'completed' ? 'primary' : 'secondary')} className="ms-2">{project.status.replace('_', ' ')}</Badge>
+                                </div>
+                                {isOwner && (
+                                    <Dropdown>
+                                        <Dropdown.Toggle variant="outline-primary" size="sm" id="status-dropdown">
+                                            Update Status
+                                        </Dropdown.Toggle>
+                                        <Dropdown.Menu>
+                                            <Dropdown.Item onClick={async () => {
+                                                try {
+                                                    await axiosInstance.patch(`/projects/${id}/update-status/`, { status: 'active' });
+                                                    const response = await axiosInstance.get(`/projects/${id}/`);
+                                                    setProject(response.data);
+                                                } catch (err) {
+                                                    alert('Failed to update status.');
+                                                }
+                                            }}>Set as Active</Dropdown.Item>
+                                            <Dropdown.Item onClick={async () => {
+                                                try {
+                                                    await axiosInstance.patch(`/projects/${id}/update-status/`, { status: 'in_progress' });
+                                                    const response = await axiosInstance.get(`/projects/${id}/`);
+                                                    setProject(response.data);
+                                                } catch (err) {
+                                                    alert('Failed to update status.');
+                                                }
+                                            }}>Set as In Progress</Dropdown.Item>
+                                            <Dropdown.Item onClick={async () => {
+                                                try {
+                                                    await axiosInstance.patch(`/projects/${id}/update-status/`, { status: 'completed' });
+                                                    const response = await axiosInstance.get(`/projects/${id}/`);
+                                                    setProject(response.data);
+                                                } catch (err) {
+                                                    alert('Failed to update status.');
+                                                }
+                                            }}>Mark as Completed</Dropdown.Item>
+                                        </Dropdown.Menu>
+                                    </Dropdown>
+                                )}
                             </Card.Subtitle>
                             <h5 className="mt-4">Description</h5>
                             <p style={{ whiteSpace: 'pre-wrap' }}>{project.description}</p>
@@ -848,24 +927,58 @@ const ProjectDetailPage = () => {
                                     </div>
                                 </ListGroup.Item>
                             </ListGroup>
-                            {/* Show Proposal button only if user is a freelancer and project is open */}
-                            {user?.user_type === 'freelancer' && project.status === 'open' && (
+                            {/* Show Proposal button only if user is a freelancer and project is active */}
+                            {user?.user_type === 'freelancer' && project.status === 'active' && (
                                 <Card.Body className="text-center">
-                                    <Button variant="primary" className="w-100" onClick={() => setShowProposalModal(true)}>
+                                    <Button variant="primary" className="w-100 mb-2" onClick={() => setShowProposalModal(true)}>
                                          <FileText size={16} className="me-1" /> Submit a Proposal
+                                    </Button>
+                                    <Button 
+                                        variant={project.is_saved ? "outline-danger" : "outline-primary"} 
+                                        className="w-100" 
+                                        onClick={async () => {
+                                            try {
+                                                if (project.is_saved) {
+                                                    const savedProjectsRes = await axiosInstance.get('/saved-projects/');
+                                                    const savedProjects = savedProjectsRes.data.results || savedProjectsRes.data;
+                                                    const saved = savedProjects.find(sp => {
+                                                        const projId = typeof sp.project === 'object' ? sp.project.id : sp.project;
+                                                        return projId === parseInt(id);
+                                                    });
+                                                    if (saved) {
+                                                        await axiosInstance.delete(`/saved-projects/${saved.id}/`);
+                                                    }
+                                                } else {
+                                                    await axiosInstance.post('/saved-projects/', { project_id: id });
+                                                }
+                                                // Refresh project data
+                                                const response = await axiosInstance.get(`/projects/${id}/`);
+                                                setProject(response.data);
+                                            } catch (err) {
+                                                alert('Failed to save/unsave project.');
+                                                console.error(err);
+                                            }
+                                        }}
+                                    >
+                                        {project.is_saved ? <><BookmarkCheck size={16} className="me-1" /> Unsave Project</> : <><Bookmark size={16} className="me-1" /> Save Project</>}
                                     </Button>
                                 </Card.Body>
                             )}
-                             {/* Link to Reviews */}
+                             {/* Link to Reviews and Milestones */}
                              <Card.Footer className="text-center">
-                                <Link to={`/review/${id}`}>View Reviews</Link>
+                                <div className="d-flex justify-content-center gap-3">
+                                    <Link to={`/review/${id}`}>View Reviews</Link>
+                                    {project.status === 'in_progress' && (
+                                        <Link to={`/project/${id}/milestones`}>View Milestones</Link>
+                                    )}
+                                </div>
                              </Card.Footer>
                         </Card>
                     </Col>
                 </Row>
             </Container>
             {/* Render modal only if needed */}
-            {user?.user_type === 'freelancer' && project.status === 'open' && (
+            {user?.user_type === 'freelancer' && project.status === 'active' && (
                  <SubmitProposalModal show={showProposalModal} handleClose={() => setShowProposalModal(false)} projectId={id} />
             )}
         </>
@@ -911,6 +1024,7 @@ const ProjectCreatePage = () => {
                 duration: duration || null, // Send null if empty
                 skill_ids: skills, // Send selected skill IDs
                 time_slot: timeSlot,
+                deadline: deadline || null,
             });
             alert('Project created successfully!');
             navigate('/dashboard'); // Redirect after creation
@@ -956,10 +1070,21 @@ const ProjectCreatePage = () => {
                                 </Form.Control>
                                  <Form.Text muted>Hold Ctrl (or Cmd on Mac) to select multiple skills.</Form.Text>
                             </Form.Group>
-                            <Form.Group className="mb-3">
-                                <Form.Label>Preferred Time Slot (Optional)</Form.Label>
-                                <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} placeholder="e.g., Weekdays 9am-5pm IST"/>
-                            </Form.Group>
+                            <Row>
+                                <Col md={6}>
+                                    <Form.Group className="mb-3">
+                                        <Form.Label>Preferred Time Slot (Optional)</Form.Label>
+                                        <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} placeholder="e.g., Weekdays 9am-5pm IST"/>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6}>
+                                    <Form.Group className="mb-3">
+                                        <Form.Label>Project Deadline (Optional)</Form.Label>
+                                        <Form.Control type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+                                        <Form.Text muted>Set deadline for project completion</Form.Text>
+                                    </Form.Group>
+                                </Col>
+                            </Row>
                             <Button type="submit" variant="primary" disabled={loading}>
                                  {loading ? <Spinner as="span" size="sm" /> : <><PlusCircle size={16} className="me-1"/> Post Project</>}
                             </Button>
@@ -1154,7 +1279,7 @@ const DashboardPage = () => {
                             <ListGroup.Item key={proj.id} className="px-3 py-2">
                                 <Row className="align-items-center g-2">
                                      <Col md={7}>
-                                        <Link to={`/project/${proj.id}`}>{proj.title}</Link> <Badge bg={proj.status === 'open' ? 'success' : (proj.status === 'in_progress' ? 'warning' : 'secondary')} className="ms-2">{proj.status.replace('_', ' ')}</Badge>
+                                        <Link to={`/project/${proj.id}`}>{proj.title}</Link> <Badge bg={proj.status === 'active' ? 'success' : (proj.status === 'in_progress' ? 'warning' : proj.status === 'completed' ? 'primary' : 'secondary')} className="ms-2">{proj.status.replace('_', ' ')}</Badge>
                                     </Col>
                                      <Col md={5} className="text-md-end">
                                         <div className="d-flex justify-content-end justify-content-md-end gap-1">
@@ -1246,6 +1371,11 @@ const DashboardPage = () => {
                              <ListGroup.Item action as={Link} to="/contracts"><FileText size={16} className="me-2"/> My Contracts</ListGroup.Item>
                              <ListGroup.Item action as={Link} to="/messages"><MessageSquare size={16} className="me-2"/> Messages</ListGroup.Item>
                              <ListGroup.Item action as={Link} to="/notifications"><Bell size={16} className="me-2"/> Notifications</ListGroup.Item>
+                             <ListGroup.Item action as={Link} to="/saved-projects"><Bookmark size={16} className="me-2"/> Saved Projects</ListGroup.Item>
+                             <ListGroup.Item action as={Link} to="/activities"><Activity size={16} className="me-2"/> Activity Feed</ListGroup.Item>
+                             <ListGroup.Item action as={Link} to="/wallet"><WalletIcon size={16} className="me-2"/> Wallet</ListGroup.Item>
+                             {user.user_type === 'client' && <ListGroup.Item action as={Link} to="/analytics"><BarChart3 size={16} className="me-2"/> Analytics</ListGroup.Item>}
+                             {user.user_type === 'freelancer' && <ListGroup.Item action as={Link} to="/invoices"><FileText size={16} className="me-2"/> Invoices</ListGroup.Item>}
                              {/* Add more links as needed */}
                         </ListGroup>
                     </Card>
@@ -1261,6 +1391,7 @@ const DashboardPage = () => {
                                 <div>
                                      <Card.Title className="fs-4 mb-0">Welcome back, {user.username}!</Card.Title>
                                      <Card.Text className="text-muted mb-0">Role: <Badge bg="info">{user.user_type}</Badge></Card.Text>
+                                     <BadgeDisplay />
                                 </div>
                             </div>
                             {/* Actions */}
@@ -1647,6 +1778,339 @@ const MessagingPage = () => {
     );
 };
 
+// --- NEW FEATURE 1: Saved Projects Page ---
+const SavedProjectsPage = () => {
+    const { user, axiosInstance } = useAuth();
+    const [savedProjects, setSavedProjects] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchSavedProjects = async () => {
+            if (!user) return;
+            setLoading(true);
+            try {
+                const response = await axiosInstance.get('/saved-projects/');
+                setSavedProjects(response.data.results || response.data);
+            } catch (err) {
+                setError('Failed to fetch saved projects.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSavedProjects();
+    }, [user, axiosInstance]);
+
+    const handleUnsave = async (projectId) => {
+        try {
+            const savedProject = savedProjects.find(sp => sp.project.id === projectId);
+            if (savedProject) {
+                await axiosInstance.delete(`/saved-projects/${savedProject.id}/`);
+                setSavedProjects(prev => prev.filter(sp => sp.id !== savedProject.id));
+            }
+        } catch (err) {
+            alert('Failed to unsave project.');
+            console.error(err);
+        }
+    };
+
+    if (loading) return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
+    if (error) return <Container><Alert variant="danger">{error}</Alert></Container>;
+
+    return (
+        <Container className="py-5 animate-fade-in">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h1 className="gradient-text"><Bookmark className="me-2" />Saved Projects</h1>
+            </div>
+            {savedProjects.length > 0 ? (
+                <Row xs={1} md={2} lg={3} className="g-4">
+                    {savedProjects.map(sp => (
+                        <Col key={sp.id}>
+                            <Card className="h-100 shadow-sm saved-project-card project-card">
+                                <Card.Body className="d-flex flex-column">
+                                    <Card.Title>
+                                        <Link to={`/project/${sp.project.id}`} className="text-decoration-none stretched-link">
+                                            {sp.project.title}
+                                        </Link>
+                                    </Card.Title>
+                                    <Card.Text className="flex-grow-1">
+                                        {sp.project.description.length > 100 ? sp.project.description.substring(0, 100) + '...' : sp.project.description}
+                                    </Card.Text>
+                                    <div className="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
+                                        <span className="fw-bold fs-5 text-success">₹{sp.project.budget}</span>
+                                        <Button variant="outline-danger" size="sm" onClick={() => handleUnsave(sp.project.id)}>
+                                            <BookmarkCheck size={16} className="me-1" /> Unsave
+                                        </Button>
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+            ) : (
+                <Alert variant="info">You haven't saved any projects yet. Start browsing and save projects you're interested in!</Alert>
+            )}
+        </Container>
+    );
+};
+
+// --- NEW FEATURE 2: Activity Feed Page ---
+const ActivityFeedPage = () => {
+    const { user, axiosInstance } = useAuth();
+    const [activities, setActivities] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchActivities = async () => {
+            if (!user) return;
+            setLoading(true);
+            try {
+                const response = await axiosInstance.get('/activities/');
+                setActivities(response.data.results || response.data);
+            } catch (err) {
+                setError('Failed to fetch activities.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchActivities();
+        const interval = setInterval(fetchActivities, 30000); // Refresh every 30s
+        return () => clearInterval(interval);
+    }, [user, axiosInstance]);
+
+    const getActivityIcon = (action) => {
+        switch (action) {
+            case 'project_created': return <Briefcase size={20} />;
+            case 'proposal_submitted': return <FileText size={20} />;
+            case 'proposal_accepted': return <Check size={20} />;
+            case 'contract_created': return <Award size={20} />;
+            case 'review_submitted': return <Star size={20} />;
+            default: return <Activity size={20} />;
+        }
+    };
+
+    if (loading) return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
+    if (error) return <Container><Alert variant="danger">{error}</Alert></Container>;
+
+    return (
+        <Container className="py-5 animate-fade-in">
+            <h1 className="mb-4 gradient-text"><Activity className="me-2" />Activity Feed</h1>
+            {activities.length > 0 ? (
+                <div>
+                    {activities.map(activity => (
+                        <div key={activity.id} className="activity-item animate-slide-in">
+                            <div className="d-flex align-items-start">
+                                <div className="me-3 mt-1 text-primary">{getActivityIcon(activity.action)}</div>
+                                <div className="flex-grow-1">
+                                    <div className="d-flex justify-content-between">
+                                        <strong>{activity.user}</strong>
+                                        <small className="text-muted">{new Date(activity.timestamp).toLocaleString()}</small>
+                                    </div>
+                                    <p className="mb-0 mt-1">{activity.description}</p>
+                                    {activity.related_project && (
+                                        <Link to={`/project/${typeof activity.related_project === 'object' ? activity.related_project.id : activity.related_project}`} className="text-decoration-none">
+                                            View Project →
+                                        </Link>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <Alert variant="info">No activities to display yet.</Alert>
+            )}
+        </Container>
+    );
+};
+
+// --- NEW FEATURE 3: Analytics Dashboard Page ---
+const AnalyticsPage = () => {
+    const { user, axiosInstance } = useAuth();
+    const [analytics, setAnalytics] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchAnalytics = async () => {
+            if (!user) return;
+            setLoading(true);
+            try {
+                const response = await axiosInstance.get('/analytics/');
+                setAnalytics(response.data.results || response.data);
+            } catch (err) {
+                setError('Failed to fetch analytics.');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAnalytics();
+    }, [user, axiosInstance]);
+
+    if (loading) return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
+    if (error) return <Container><Alert variant="danger">{error}</Alert></Container>;
+
+    return (
+        <Container className="py-5 animate-fade-in">
+            <h1 className="mb-4 gradient-text"><BarChart3 className="me-2" />Project Analytics</h1>
+            {analytics.length > 0 ? (
+                <Row xs={1} md={2} lg={3} className="g-4">
+                    {analytics.map(anal => (
+                        <Col key={anal.id}>
+                            <Card className="shadow-sm">
+                                <Card.Header>
+                                    <Link to={`/project/${typeof anal.project === 'object' ? anal.project : anal.project}`} className="text-white text-decoration-none">
+                                        Project Analytics
+                                    </Link>
+                                </Card.Header>
+                                <Card.Body>
+                                    <div className="analytics-card">
+                                        <h3>{anal.total_views}</h3>
+                                        <p>Total Views</p>
+                                    </div>
+                                    <Row className="mt-3">
+                                        <Col xs={6}>
+                                            <div className="text-center">
+                                                <h4 className="text-primary">{anal.unique_views}</h4>
+                                                <small className="text-muted">Unique Views</small>
+                                            </div>
+                                        </Col>
+                                        <Col xs={6}>
+                                            <div className="text-center">
+                                                <h4 className="text-success">{anal.proposals_count}</h4>
+                                                <small className="text-muted">Proposals</small>
+                                            </div>
+                                        </Col>
+                                        <Col xs={12} className="mt-2">
+                                            <div className="text-center">
+                                                <h4 className="text-warning">{anal.saved_count}</h4>
+                                                <small className="text-muted">Saved Count</small>
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+            ) : (
+                <Alert variant="info">No analytics data available yet.</Alert>
+            )}
+        </Container>
+    );
+};
+
+// --- NEW FEATURE 4: Advanced Filters Component (used in ProjectListPage) ---
+const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
+    const [filters, setFilters] = useState({
+        minBudget: '',
+        maxBudget: '',
+        skills: [],
+        status: 'active',
+        sortBy: 'created_at'
+    });
+
+    const handleFilterChange = (key, value) => {
+        const newFilters = { ...filters, [key]: value };
+        setFilters(newFilters);
+        onFilterChange(newFilters);
+    };
+
+    return (
+        <Card className="filter-panel animate-slide-in">
+            <Card.Header className="d-flex align-items-center">
+                <Filter className="me-2" /> Advanced Filters
+            </Card.Header>
+            <Card.Body>
+                <Row>
+                    <Col md={6}>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Min Budget (₹)</Form.Label>
+                            <Form.Control type="number" value={filters.minBudget} onChange={e => handleFilterChange('minBudget', e.target.value)} placeholder="0" />
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Max Budget (₹)</Form.Label>
+                            <Form.Control type="number" value={filters.maxBudget} onChange={e => handleFilterChange('maxBudget', e.target.value)} placeholder="100000" />
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Status</Form.Label>
+                            <Form.Select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}>
+                                <option value="open">Open</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="completed">Completed</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Sort By</Form.Label>
+                            <Form.Select value={filters.sortBy} onChange={e => handleFilterChange('sortBy', e.target.value)}>
+                                <option value="created_at">Newest</option>
+                                <option value="-budget">Budget: High to Low</option>
+                                <option value="budget">Budget: Low to High</option>
+                                <option value="-view_count">Most Viewed</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                </Row>
+            </Card.Body>
+        </Card>
+    );
+};
+
+// --- NEW FEATURE 5: Badge Display Component ---
+const BadgeDisplay = ({ userId }) => {
+    const { axiosInstance } = useAuth();
+    const [badges, setBadges] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchBadges = async () => {
+            setLoading(true);
+            try {
+                const url = userId ? `/badges/?user_id=${userId}` : '/badges/';
+                const response = await axiosInstance.get(url);
+                setBadges(response.data.results || response.data);
+            } catch (err) {
+                console.error('Failed to fetch badges:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchBadges();
+    }, [userId, axiosInstance]);
+
+    const getBadgeIcon = (badgeType) => {
+        switch (badgeType) {
+            case 'verified': return <Shield size={16} />;
+            case 'top_freelancer': case 'top_client': return <Trophy size={16} />;
+            case 'excellent_review': return <Star size={16} />;
+            default: return <Award size={16} />;
+        }
+    };
+
+    if (loading) return <Spinner size="sm" />;
+    if (badges.length === 0) return null;
+
+    return (
+        <div className="badge-container">
+            {badges.map(badge => (
+                <span key={badge.id} className="user-badge" title={badge.description || badge.badge_type}>
+                    {getBadgeIcon(badge.badge_type)}
+                    {badge.get_badge_type_display || badge.badge_type.replace('_', ' ')}
+                </span>
+            ))}
+        </div>
+    );
+};
 
 // --- Main App Component ---
 function App() {
@@ -1674,6 +2138,13 @@ function App() {
                         <Route path="/messages" element={<MessagingPage />} />
                         <Route path="/project/new" element={<ProjectCreatePage />} />
                         <Route path="/project/:id/edit" element={<ProjectEditPage />} />
+                        {/* New Feature Routes */}
+                        <Route path="/saved-projects" element={<SavedProjectsPage />} />
+                        <Route path="/activities" element={<ActivityFeedPage />} />
+                        <Route path="/analytics" element={<AnalyticsPage />} />
+                        <Route path="/wallet" element={<WalletPage />} />
+                        <Route path="/project/:id/milestones" element={<MilestonesPage />} />
+                        <Route path="/invoices" element={<InvoicesPage />} />
                         {/* <Route path="/proposal/:id/edit" element={<ProposalEditPage />} /> */}
 
                         {/* 404 Not Found Route */}
