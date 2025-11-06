@@ -274,23 +274,22 @@ class SavedProjectSerializer(serializers.ModelSerializer):
 class ActivityLogSerializer(serializers.ModelSerializer):
     """Serializer for ActivityLog model."""
     user = serializers.StringRelatedField(read_only=True)
-    related_project = serializers.StringRelatedField(read_only=True)
+    related_project = serializers.PrimaryKeyRelatedField(read_only=True)
     related_user = serializers.StringRelatedField(read_only=True)
 
     class Meta:
         model = ActivityLog
         fields = '__all__'
-        read_only_fields = '__all__'
-
+      
 
 class ProjectAnalyticsSerializer(serializers.ModelSerializer):
     """Serializer for ProjectAnalytics model."""
-    project = serializers.StringRelatedField(read_only=True)
+    project = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = ProjectAnalytics
         fields = '__all__'
-        read_only_fields = '__all__'
+        
 
 
 class AchievementBadgeSerializer(serializers.ModelSerializer):
@@ -305,12 +304,25 @@ class AchievementBadgeSerializer(serializers.ModelSerializer):
 
 class MilestoneSerializer(serializers.ModelSerializer):
     """Serializer for Milestone model."""
-    project = serializers.StringRelatedField(read_only=True)
+    
+    # For reading (GET): show project title
+    project_title = serializers.CharField(source='project.title', read_only=True)
+    
+    # For writing (POST): accept a project ID
+    # We use Project.objects.all() here, the permission check is done in the view.
+    project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all())
 
     class Meta:
         model = Milestone
-        fields = '__all__'
-        read_only_fields = ('id', 'created_at', 'updated_at', 'completed_at')
+        # Explicitly list fields to include the new project_title
+        fields = (
+            'id', 'project', 'project_title', 'title', 'description', 
+            'amount', 'due_date', 'status', 'completed_at', 
+            'created_at', 'updated_at'
+        )
+        read_only_fields = (
+            'id', 'project_title', 'created_at', 'updated_at', 'completed_at'
+        )
 
 
 class ProjectFileSerializer(serializers.ModelSerializer):

@@ -186,7 +186,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update', 'destroy']:
             # Only the client owner of the project can modify/delete it
             self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Checks obj.client
-        elif self.action in ['list', 'retrieve']:
+        elif self.action in ['list', 'retrieve', 'update_status']:
              # Any authenticated user can view lists/details (visibility controlled by get_queryset)
              self.permission_classes = [permissions.IsAuthenticated]
         else:
@@ -325,7 +325,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Ensure project exists and is open (serializer queryset also helps)
-        if not project or project.status != 'open':
+        if not project or project.status != 'active':
              raise ValidationError("Project not found or is not open for proposals.")
 
         # Ensure client cannot propose on their own project (although IsFreelancer perm should prevent this)

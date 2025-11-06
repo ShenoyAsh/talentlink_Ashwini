@@ -994,6 +994,7 @@ const ProjectCreatePage = () => {
     const [skills, setSkills] = useState([]); // Stores selected skill IDs
     const [availableSkills, setAvailableSkills] = useState([]);
     const [timeSlot, setTimeSlot] = useState('');
+    const [deadline, setDeadline] = useState('');
     const [loading, setLoading] = useState(false); // Loading state
     const [error, setError] = useState(''); // Error state
     const { axiosInstance } = useAuth();
@@ -1173,7 +1174,7 @@ const DashboardPage = () => {
                               errorData?.detail ||
                               (errorData && Object.values(errorData).flat().join(' ')) || // Flatten errors
                               'Failed to update proposal status.';
-            setUpdateError(`Error updating proposal #${id}: ${errorMsg}`); // Set specific error message
+            setUpdateError(`${errorMsg}`); // Set specific error message
             console.error('Failed to update proposal status:', errorMsg, error.response?.data || error.message);
             // Optionally: alert(`Failed to update status: ${errorMsg}`);
         }
@@ -2005,31 +2006,50 @@ const AnalyticsPage = () => {
 };
 
 // --- NEW FEATURE 4: Advanced Filters Component (used in ProjectListPage) ---
+// --- NEW FEATURE 4: Advanced Filters Component (used in ProjectListPage) ---
 const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
-    const [filters, setFilters] = useState({
+    
+    // 1. Define the default (cleared) state for the filters
+    const defaultFilters = {
         minBudget: '',
         maxBudget: '',
-        skills: [],
-        status: 'active',
+        status: 'active', // Default to the 'active' status we fixed
         sortBy: 'created_at'
-    });
+    };
 
+    // 2. The component now manages its own state
+    const [filters, setFilters] = useState(defaultFilters);
+
+    // 3. When any filter changes, update the internal state AND tell the parent
     const handleFilterChange = (key, value) => {
         const newFilters = { ...filters, [key]: value };
         setFilters(newFilters);
-        onFilterChange(newFilters);
+        onFilterChange(newFilters); // This triggers the project list to re-fetch
+    };
+
+    // 4. NEW: This function resets the state and tells the parent
+    const handleClear = () => {
+        setFilters(defaultFilters);      // Resets the values in this component
+        onFilterChange(defaultFilters); // Resets the filters in the parent page
     };
 
     return (
         <Card className="filter-panel animate-slide-in">
-            <Card.Header className="d-flex align-items-center">
-                <Filter className="me-2" /> Advanced Filters
+            {/* 5. NEW: Added "Clear Filters" button to the header */}
+            <Card.Header className="d-flex justify-content-between align-items-center">
+                <span>
+                    <Filter className="me-2" /> Advanced Filters
+                </span>
+                <Button variant="outline-danger" size="sm" onClick={handleClear}>
+                    Clear Filters
+                </Button>
             </Card.Header>
             <Card.Body>
                 <Row>
                     <Col md={6}>
                         <Form.Group className="mb-3">
                             <Form.Label>Min Budget (₹)</Form.Label>
+                            {/* 6. Forms are now correctly linked to the 'filters' state */}
                             <Form.Control type="number" value={filters.minBudget} onChange={e => handleFilterChange('minBudget', e.target.value)} placeholder="0" />
                         </Form.Group>
                     </Col>
@@ -2043,7 +2063,7 @@ const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
                         <Form.Group className="mb-3">
                             <Form.Label>Status</Form.Label>
                             <Form.Select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}>
-                                <option value="open">Open</option>
+                                <option value="active">Active</option> {/* This line is now correct */}
                                 <option value="in_progress">In Progress</option>
                                 <option value="completed">Completed</option>
                             </Form.Select>
