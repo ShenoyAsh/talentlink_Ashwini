@@ -186,7 +186,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update', 'destroy']:
             # Only the client owner of the project can modify/delete it
             self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Checks obj.client
-        elif self.action in ['list', 'retrieve', 'update_status']:
+        elif self.action in ['list', 'retrieve', 'update_status']: # <-- FIX WAS HERE
              # Any authenticated user can view lists/details (visibility controlled by get_queryset)
              self.permission_classes = [permissions.IsAuthenticated]
         else:
@@ -325,7 +325,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Ensure project exists and is open (serializer queryset also helps)
-        if not project or project.status != 'active':
+        if not project or project.status != 'active': # <-- FIX WAS HERE
              raise ValidationError("Project not found or is not open for proposals.")
 
         # Ensure client cannot propose on their own project (although IsFreelancer perm should prevent this)
@@ -836,6 +836,89 @@ class MilestoneViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only project owner can create milestones.")
         serializer.save()
 
+    @transaction.atomic
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Override partial_update to handle payment logic when a milestone
+        is marked as 'approved'.
+        """
+        milestone = self.get_object()
+        new_status = request.data.get('status')
+        old_status = milestone.status
+
+        # Check if this is an approval action (from 'completed' to 'approved')
+        if new_status == 'approved' and old_status == 'completed':
+            logger.info(f"Attempting to approve milestone {milestone.id} and process payment.")
+            
+            # We wrap the *entire* logic in a try/except to ensure the transaction rolls back
+            try:
+                project = milestone.project
+                client = project.client
+                amount = milestone.amount
+
+                # 1. Find the freelancer from the project's contract
+                try:
+                    contract = Contract.objects.get(project=project)
+                    freelancer = contract.freelancer
+                except Contract.DoesNotExist:
+                    logger.error(f"Payment failed for milestone {milestone.id}: No contract found for project {project.id}.")
+                    raise ValidationError("Payment failed: Cannot find a contract associated with this project.")
+
+                # 2. Get and LOCK both wallets
+                # This is the most robust way: get_or_create, then re-fetch with a lock.
+                Wallet.objects.get_or_create(user=client)
+                Wallet.objects.get_or_create(user=freelancer)
+                
+                # THIS IS THE CRITICAL FIX:
+                # Lock the rows for the duration of this transaction
+                client_wallet = Wallet.objects.select_for_update().get(user=client)
+                freelancer_wallet = Wallet.objects.select_for_update().get(user=frelancer)
+
+                # 3. Check client's balance
+                if client_wallet.balance < amount:
+                    logger.warning(f"Payment failed for milestone {milestone.id}: Client {client.username} has insufficient funds (Balance: {client_wallet.balance}, Needed: {amount}).")
+                    raise ValidationError(f"Payment failed: Client's wallet has insufficient funds.")
+
+                # 4. Transfer funds
+                client_wallet.balance -= amount
+                freelancer_wallet.balance += amount
+
+                # 5. Create transactions for logging
+                Transaction.objects.create(
+                    wallet=client_wallet,
+                    transaction_type='payment',
+                    amount=amount,
+                    description=f"Milestone payment for '{milestone.title}' to {freelancer.username}"
+                )
+                Transaction.objects.create(
+                    wallet=freelancer_wallet,
+                    transaction_type='deposit',
+                    amount=amount,
+                    description=f"Milestone payment received for '{milestone.title}' from {client.username}"
+                )
+
+                # 6. Save everything
+                client_wallet.save()
+                freelancer_wallet.save()
+                milestone.completed_at = timezone.now()
+                
+                logger.info(f"Milestone {milestone.id} approved. Transferred {amount} from {client.username} to {freelancer.username}.")
+
+                # 7. Save the milestone status *inside* the transaction
+                return super().partial_update(request, *args, **kwargs)
+
+            except Exception as e:
+                # Catch any error (insufficient funds, DB error, etc.)
+                logger.error(f"Payment processing failed for milestone {milestone.id}: {e}", exc_info=True)
+                # Re-raise the error to force the @transaction.atomic to ROLLBACK
+                if isinstance(e, ValidationError):
+                    raise e # Re-raise the specific "insufficient funds" error
+                else:
+                    raise ValidationError(f"An error occurred during payment processing: {e}")
+
+        # If the status was NOT 'approved', just run the normal update
+        return super().partial_update(request, *args, **kwargs)
+
 
 class ProjectFileViewSet(viewsets.ModelViewSet):
     """ViewSet for managing project files."""
@@ -929,6 +1012,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         wallet, created = Wallet.objects.get_or_create(user=user)
         return Transaction.objects.filter(wallet=wallet).select_related('wallet', 'related_payment')
 
+    @transaction.atomic
     def perform_create(self, serializer):
         """Create transaction and update wallet balance."""
         wallet, created = Wallet.objects.get_or_create(user=self.request.user)
