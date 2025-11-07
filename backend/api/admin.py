@@ -2,8 +2,8 @@
 from django.contrib import admin
 
 from .models import (
-    User, Profile, Skill, Project, Proposal, Contract, Message, Review,
-    PortfolioItem, Notification
+    Transaction, User, Profile, Skill, Project, Proposal, Contract, Message, Review,
+    PortfolioItem, Notification,Milestone, ProjectFile, Payment, Invoice, Wallet
 )
 
 
@@ -17,3 +17,9 @@ admin.site.register(Message)
 admin.site.register(Review)
 admin.site.register(PortfolioItem)
 admin.site.register(Notification)
+admin.site.register(Transaction)
+admin.site.register(Milestone)
+admin.site.register(ProjectFile)
+admin.site.register(Payment)
+admin.site.register(Invoice)
+admin.site.register(Wallet)

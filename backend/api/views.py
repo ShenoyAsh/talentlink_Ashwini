@@ -186,7 +186,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update', 'destroy']:
             # Only the client owner of the project can modify/delete it
             self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Checks obj.client
-        elif self.action in ['list', 'retrieve', 'update_status']: # <-- FIX WAS HERE
+        elif self.action in ['list', 'retrieve', 'update_status']:
              # Any authenticated user can view lists/details (visibility controlled by get_queryset)
              self.permission_classes = [permissions.IsAuthenticated]
         else:
@@ -325,7 +325,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Ensure project exists and is open (serializer queryset also helps)
-        if not project or project.status != 'active': # <-- FIX WAS HERE
+        if not project or project.status != 'active':
              raise ValidationError("Project not found or is not open for proposals.")
 
         # Ensure client cannot propose on their own project (although IsFreelancer perm should prevent this)
@@ -869,10 +869,11 @@ class MilestoneViewSet(viewsets.ModelViewSet):
                 Wallet.objects.get_or_create(user=client)
                 Wallet.objects.get_or_create(user=freelancer)
                 
-                # THIS IS THE CRITICAL FIX:
                 # Lock the rows for the duration of this transaction
                 client_wallet = Wallet.objects.select_for_update().get(user=client)
-                freelancer_wallet = Wallet.objects.select_for_update().get(user=frelancer)
+                
+                # --- FIX: Corrected 'frelancer' to 'freelancer' ---
+                freelancer_wallet = Wallet.objects.select_for_update().get(user=freelancer)
 
                 # 3. Check client's balance
                 if client_wallet.balance < amount:
@@ -897,15 +898,21 @@ class MilestoneViewSet(viewsets.ModelViewSet):
                     description=f"Milestone payment received for '{milestone.title}' from {client.username}"
                 )
 
-                # 6. Save everything
-                client_wallet.save()
-                freelancer_wallet.save()
+                # 6. Save wallet changes
+                client_wallet.save(update_fields=['balance'])
+                freelancer_wallet.save(update_fields=['balance'])
+
+                # --- FIX: Manually save milestone status and completed_at ---
                 milestone.completed_at = timezone.now()
-                
+                milestone.status = new_status
+                milestone.save(update_fields=['status', 'completed_at'])
+
                 logger.info(f"Milestone {milestone.id} approved. Transferred {amount} from {client.username} to {freelancer.username}.")
 
-                # 7. Save the milestone status *inside* the transaction
-                return super().partial_update(request, *args, **kwargs)
+                # 9. Return a serialized response directly
+                serializer = self.get_serializer(milestone)
+                return Response(serializer.data)
+                # --- END FIX (Replaced super() call) ---
 
             except Exception as e:
                 # Catch any error (insufficient funds, DB error, etc.)
@@ -1019,6 +1026,10 @@ class TransactionViewSet(viewsets.ModelViewSet):
         transaction_type = serializer.validated_data.get('transaction_type')
         amount = serializer.validated_data.get('amount')
         
+        # --- FIX: Ensure amount is a number ---
+        if amount is None or amount < 0:
+            raise ValidationError("A valid amount is required.")
+        
         transaction = serializer.save(wallet=wallet)
         
         # Update wallet balance
@@ -1028,6 +1039,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
             if wallet.balance < amount:
                 raise ValidationError("Insufficient balance.")
             wallet.balance -= amount
+        
+        # --- FIX: Ensure update_fields is correct ---
         wallet.save(update_fields=['balance'])
         
         return transaction

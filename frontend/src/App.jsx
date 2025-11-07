@@ -385,6 +385,7 @@ const NotificationBell = () => {
 
 
 // --- Main Layout ---
+// --- Main Layout ---
 const AppNavbar = () => {
     const { user, logout } = useAuth();
 
@@ -452,7 +453,6 @@ const AppNavbar = () => {
         </Navbar>
     );
 };
-
 
 // --- Page Components (Keep implementations as previously corrected) ---
 // HomePage is now imported from components/HomePage.jsx

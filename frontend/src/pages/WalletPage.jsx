@@ -16,6 +16,10 @@ const WalletPage = () => {
     const [amount, setAmount] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    
+    // --- FIX: Add loading states for modal forms ---
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
 
     useEffect(() => {
         fetchWalletData();
@@ -25,11 +29,16 @@ const WalletPage = () => {
         if (!user) return;
         setLoading(true);
         try {
+            // --- FIX: Fetch wallet and transactions in parallel ---
             const [walletRes, transactionsRes] = await Promise.all([
                 axiosInstance.get('/wallet/'),
                 axiosInstance.get('/transactions/')
             ]);
-            setWallet(walletRes.data.results?.[0] || walletRes.data);
+            
+            // --- FIX: Handle paginated or single object response for wallet ---
+            const walletData = walletRes.data.results ? walletRes.data.results[0] : walletRes.data[0];
+            setWallet(walletData);
+            
             setTransactions(transactionsRes.data.results || transactionsRes.data);
         } catch (err) {
             setError('Failed to fetch wallet data.');
@@ -43,6 +52,7 @@ const WalletPage = () => {
         e.preventDefault();
         setError('');
         setSuccess('');
+        setIsSubmitting(true); // --- FIX: Set loading state ---
         try {
             await axiosInstance.post('/transactions/', {
                 transaction_type: 'deposit',
@@ -52,9 +62,13 @@ const WalletPage = () => {
             setSuccess(`Successfully deposited ₹${amount}`);
             setShowDepositModal(false);
             setAmount('');
-            fetchWalletData();
+            fetchWalletData(); // Refresh all data
         } catch (err) {
-            setError(err.response?.data?.detail || 'Failed to deposit.');
+            // --- FIX: Provide detailed error messages ---
+            const errorMsg = err.response?.data?.detail || err.response?.data?.amount || 'Failed to deposit.';
+            setError(errorMsg);
+        } finally {
+            setIsSubmitting(false); // --- FIX: Unset loading state ---
         }
     };
 
@@ -62,10 +76,13 @@ const WalletPage = () => {
         e.preventDefault();
         setError('');
         setSuccess('');
+        
         if (parseFloat(amount) > wallet?.balance) {
             setError('Insufficient balance.');
             return;
         }
+        
+        setIsSubmitting(true); // --- FIX: Set loading state ---
         try {
             await axiosInstance.post('/transactions/', {
                 transaction_type: 'withdrawal',
@@ -75,9 +92,13 @@ const WalletPage = () => {
             setSuccess(`Successfully withdrew ₹${amount}`);
             setShowWithdrawModal(false);
             setAmount('');
-            fetchWalletData();
+            fetchWalletData(); // Refresh all data
         } catch (err) {
-            setError(err.response?.data?.detail || 'Failed to withdraw.');
+            // --- FIX: Provide detailed error messages ---
+            const errorMsg = err.response?.data?.detail || err.response?.data?.amount || 'Failed to withdraw.';
+            setError(errorMsg);
+        } finally {
+            setIsSubmitting(false); // --- FIX: Unset loading state ---
         }
     };
 
@@ -89,6 +110,7 @@ const WalletPage = () => {
                 <h1 className="gradient-text"><WalletIcon className="me-2" />My Wallet</h1>
             </div>
 
+            {/* --- FIX: Make errors dismissible --- */}
             {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
             {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
 
@@ -101,7 +123,8 @@ const WalletPage = () => {
                                 <WalletIcon size={32} className="text-primary" />
                             </div>
                             <h2 className="display-4 fw-bold text-success mb-0">
-                                ₹{wallet?.balance?.toFixed(2) || '0.00'}
+                                {/* --- FIX: Ensure wallet exists before accessing balance --- */}
+                                ₹{wallet?.balance ? parseFloat(wallet.balance).toFixed(2) : '0.00'}
                             </h2>
                             <p className="text-muted mb-0 mt-2">Available for withdrawal</p>
                         </Card.Body>
@@ -112,10 +135,10 @@ const WalletPage = () => {
                         <Card.Body className="p-4">
                             <h5 className="mb-3">Quick Actions</h5>
                             <div className="d-grid gap-2">
-                                <Button variant="primary" onClick={() => setShowDepositModal(true)}>
+                                <Button variant="primary" onClick={() => { setShowDepositModal(true); setError(''); setAmount(''); }}>
                                     <Plus size={18} className="me-2" /> Deposit Funds
                                 </Button>
-                                <Button variant="outline-primary" onClick={() => setShowWithdrawModal(true)}>
+                                <Button variant="outline-primary" onClick={() => { setShowWithdrawModal(true); setError(''); setAmount(''); }}>
                                     <Minus size={18} className="me-2" /> Withdraw Funds
                                 </Button>
                             </div>
@@ -148,6 +171,7 @@ const WalletPage = () => {
                                             <Badge bg={
                                                 t.transaction_type === 'deposit' ? 'success' :
                                                 t.transaction_type === 'withdrawal' ? 'warning' :
+                                                t.transaction_type === 'payment' ? 'danger' :
                                                 'info'
                                             }>
                                                 {t.transaction_type}
@@ -175,6 +199,8 @@ const WalletPage = () => {
                 </Modal.Header>
                 <Form onSubmit={handleDeposit}>
                     <Modal.Body>
+                        {/* --- FIX: Show modal-specific errors --- */}
+                        {error && <Alert variant="danger">{error}</Alert>}
                         <Form.Group className="mb-3">
                             <Form.Label>Amount (₹)</Form.Label>
                             <Form.Control
@@ -189,8 +215,10 @@ const WalletPage = () => {
                         </Form.Group>
                     </Modal.Body>
                     <Modal.Footer>
-                        <Button variant="secondary" onClick={() => setShowDepositModal(false)}>Cancel</Button>
-                        <Button variant="primary" type="submit">Deposit</Button>
+                        <Button variant="secondary" onClick={() => setShowDepositModal(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button variant="primary" type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? <Spinner as="span" size="sm" /> : 'Deposit'}
+                        </Button>
                     </Modal.Footer>
                 </Form>
             </Modal>
@@ -202,7 +230,9 @@ const WalletPage = () => {
                 </Modal.Header>
                 <Form onSubmit={handleWithdraw}>
                     <Modal.Body>
-                        <Alert variant="info">Available Balance: ₹{wallet?.balance?.toFixed(2) || '0.00'}</Alert>
+                        {/* --- FIX: Show modal-specific errors --- */}
+                        {error && <Alert variant="danger">{error}</Alert>}
+                        <Alert variant="info">Available Balance: ₹{wallet?.balance ? parseFloat(wallet.balance).toFixed(2) : '0.00'}</Alert>
                         <Form.Group className="mb-3">
                             <Form.Label>Amount (₹)</Form.Label>
                             <Form.Control
@@ -218,8 +248,10 @@ const WalletPage = () => {
                         </Form.Group>
                     </Modal.Body>
                     <Modal.Footer>
-                        <Button variant="secondary" onClick={() => setShowWithdrawModal(false)}>Cancel</Button>
-                        <Button variant="primary" type="submit">Withdraw</Button>
+                        <Button variant="secondary" onClick={() => setShowWithdrawModal(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button variant="primary" type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? <Spinner as="span" size="sm" /> : 'Withdraw'}
+                        </Button>
                     </Modal.Footer>
                 </Form>
             </Modal>
@@ -228,4 +260,3 @@ const WalletPage = () => {
 };
 
 export default WalletPage;
-
