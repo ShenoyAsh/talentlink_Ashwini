@@ -292,12 +292,32 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+
 class ProposalViewSet(viewsets.ModelViewSet):
     """ ViewSet for managing project proposals. """
     # Optimized queryset
     queryset = Proposal.objects.all().select_related('project__client', 'freelancer__profile').order_by('-submitted_at') # Added profile relations
     serializer_class = ProposalSerializer
     permission_classes = [permissions.IsAuthenticated] # Base permission
+
+    @action(detail=True, methods=['patch'], url_path='rate', permission_classes=[permissions.IsAuthenticated])
+    def rate(self, request, pk=None):
+        """Allow the client to rate a proposal (1-5)."""
+        proposal = get_object_or_404(Proposal.objects.select_related('project', 'freelancer'), pk=pk)
+        # Only the client who owns the project can rate
+        if proposal.project.client != request.user:
+            raise PermissionDenied("Only the project owner can rate this proposal.")
+        rating = request.data.get('rating')
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return Response({'detail': 'Rating must be an integer between 1 and 5.'}, status=status.HTTP_400_BAD_REQUEST)
+        if rating < 1 or rating > 5:
+            return Response({'detail': 'Rating must be between 1 and 5.'}, status=status.HTTP_400_BAD_REQUEST)
+        proposal.rating = rating
+        proposal.save(update_fields=['rating'])
+        serializer = self.get_serializer(proposal)
+        return Response(serializer.data)
 
     def get_permissions(self):
         """ Set permissions based on the action. """

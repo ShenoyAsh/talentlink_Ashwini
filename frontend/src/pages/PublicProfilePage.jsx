@@ -59,6 +59,10 @@ const PublicProfilePage = () => {
 
     const displayImageUrl = getFullImageUrl(profile.profile_picture) || `https://via.placeholder.com/100/007bff/FFFFFF?text=${profile.user.charAt(0).toUpperCase() || 'U'}`;
 
+    // Import BadgeDisplay from App.jsx
+    // eslint-disable-next-line
+    const BadgeDisplay = require('../App').default?.BadgeDisplay || require('../App').BadgeDisplay;
+
     return (
         <Container className="py-5">
             <Row className="justify-content-center">
@@ -79,6 +83,10 @@ const PublicProfilePage = () => {
                                     )}
                                 </h3>
                                 <p className="text-muted">{profile.headline || 'No headline set'}</p>
+                                {/* Show earned badges for the public profile user */}
+                                <div className="mb-3">
+                                    <BadgeDisplay userId={profile.id} />
+                                </div>
                             </div>
                             <p><Briefcase size={16} className="me-2 text-primary" /> <Badge bg="info" className="fs-6">{profile.user_type}</Badge></p>
                             <hr />

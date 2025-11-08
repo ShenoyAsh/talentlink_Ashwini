@@ -70,6 +70,7 @@ class Project(models.Model):
     deadline = models.DateField(null=True, blank=True, help_text="Project completion deadline")
     reminder_sent = models.BooleanField(default=False, help_text="Whether reminder has been sent")
     view_count = models.IntegerField(default=0, help_text="Number of times project has been viewed")
+    image = models.ImageField(upload_to='project_images/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -90,6 +91,7 @@ class Proposal(models.Model):
     additional_info = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
+    rating = models.IntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)], help_text="Client rating for this proposal (1-5)")
     # Store the previous status to detect changes
     _original_status = None
 

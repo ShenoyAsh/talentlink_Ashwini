@@ -303,17 +303,19 @@ const ProfilePage = () => {
         return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
     }
 
-     // Handle case where user exists but profile fetch failed or profileId missing
+    // Handle case where user exists but profile fetch failed or profileId missing
     if (!profile && !loading) {
-         // Check for specific error message or just show generic
-         const message = error || "Could not load profile data. Please try again later or contact support.";
+        const message = error || "Could not load profile data. Please try again later or contact support.";
         return <Container><Alert variant="warning">{message}</Alert></Container>;
     }
 
+    const currentProfilePictureUrl = getFullImageUrl(profile?.profile_picture);
+    const displayImageUrl = profilePicturePreview || currentProfilePictureUrl || `https://via.placeholder.com/100/007bff/FFFFFF?text=${user?.username?.charAt(0).toUpperCase() || 'U'}`;
 
-     const currentProfilePictureUrl = getFullImageUrl(profile?.profile_picture);
-     const displayImageUrl = profilePicturePreview || currentProfilePictureUrl || `https://via.placeholder.com/100/007bff/FFFFFF?text=${user?.username?.charAt(0).toUpperCase() || 'U'}`;
-
+    // Import BadgeDisplay from App.jsx
+    // eslint-disable-next-line
+    
+    const BadgeDisplay = require('../App').default?.BadgeDisplay || require('../App').BadgeDisplay;
 
     return (
         <>
@@ -323,7 +325,7 @@ const ProfilePage = () => {
                         <Card className="shadow-sm">
                             <Card.Header as="h2" className="d-flex justify-content-between align-items-center bg-light">
                                 <span><User className="me-2"/>Profile</span>
-                                <Button variant={isEditing ? "outline-secondary" : "outline-primary"} size="sm" onClick={() => { setIsEditing(!isEditing); if (!isEditing) fetchProfile(); }}> {/* Refetch data on Cancel */}
+                                <Button variant={isEditing ? "outline-secondary" : "outline-primary"} size="sm" onClick={() => { setIsEditing(!isEditing); if (!isEditing) fetchProfile(); }}>
                                     {isEditing ? 'Cancel' : <><Edit size={14} className="me-1"/> Edit Profile</>}
                                 </Button>
                             </Card.Header>
@@ -331,118 +333,20 @@ const ProfilePage = () => {
                                 {/* Display general error only when NOT editing, handle form errors inside form */}
                                 {error && !isEditing && <Alert variant="danger">{error}</Alert>}
 
+                                {/* Show earned badges for the user */}
+                                <div className="mb-3">
+                                    <BadgeDisplay />
+                                </div>
+
                                 {isEditing ? (
+                                    // ...existing code...
                                     <Form onSubmit={handleSaveChanges}>
-                                         <Form.Group className="mb-3 text-center">
-                                             <Image
-                                                 src={displayImageUrl}
-                                                 roundedCircle
-                                                 style={{ width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px', cursor: 'pointer', border: '1px solid #dee2e6' }}
-                                                 onClick={() => document.getElementById('profilePictureInput').click()}
-                                            />
-                                            <Form.Control
-                                                id="profilePictureInput"
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleProfilePictureChange}
-                                                style={{ display: 'none' }}
-                                            />
-                                             <Form.Text muted>Click image to change</Form.Text>
-                                             {/* Display form-specific error here if needed */}
-                                              {error && <Alert variant="danger" className="mt-2">{error}</Alert>}
-                                        </Form.Group>
-
-                                        {/* Other Form Groups remain similar */}
-                                        <Form.Group className="mb-3"><Form.Label>Headline</Form.Label><Form.Control type="text" name="headline" value={formData.headline || ''} onChange={handleInputChange} placeholder="e.g., Senior Web Developer"/></Form.Group>
-                                        <Form.Group className="mb-3"><Form.Label>Bio</Form.Label><Form.Control as="textarea" rows={4} name="bio" value={formData.bio || ''} onChange={handleInputChange} placeholder="Tell us about yourself..."/></Form.Group>
-                                        <Row>
-                                            <Col md={6}><Form.Group className="mb-3"><Form.Label>Country</Form.Label><Form.Control type="text" name="country" value={formData.country || ''} onChange={handleInputChange} /></Form.Group></Col>
-                                            <Col md={6}><Form.Group className="mb-3"><Form.Label>Timezone</Form.Label><Form.Control type="text" name="timezone" value={formData.timezone || ''} onChange={handleInputChange} placeholder="e.g., Asia/Kolkata"/></Form.Group></Col>
-                                        </Row>
-                                        <Form.Group className="mb-3"><Form.Label>Portfolio Link (General)</Form.Label><Form.Control type="url" name="portfolio_link" value={formData.portfolio_link || ''} onChange={handleInputChange} placeholder="https://yourportfolio.com"/></Form.Group>
-
-                                        {user?.user_type === 'freelancer' && (
-                                            <>
-                                                <Form.Group className="mb-3"><Form.Label>Hourly Rate (₹)</Form.Label><Form.Control type="number" step="0.01" name="hourly_rate" value={formData.hourly_rate || ''} onChange={handleInputChange} placeholder="e.g., 2500.00"/></Form.Group>
-                                                 {/* Skills Text Input */}
-                                                 <Form.Group className="mb-3">
-                                                    <Form.Label><Tags size={16} className="me-1"/> Skills</Form.Label>
-                                                    <Form.Control
-                                                        type="text"
-                                                        value={skillsInput}
-                                                        onChange={handleSkillsInputChange}
-                                                        placeholder="Enter skills separated by commas"
-                                                    />
-                                                    <Form.Text muted>Separate skills with commas (e.g., React, Node.js, Python).</Form.Text>
-                                                </Form.Group>
-                                            </>
-                                        )}
-                                        <Button type="submit" variant="primary" disabled={loading}>
-                                            <Save size={16} className="me-2" />
-                                            {loading ? <Spinner as="span" size="sm" /> : 'Save Changes'}
-                                        </Button>
+                                        {/* ...existing code... */}
                                     </Form>
                                 ) : (
+                                    // ...existing code...
                                     <>
-                                        <div className="text-center mb-4">
-                                            <Image src={displayImageUrl} roundedCircle style={{ width: '100px', height: '100px', objectFit: 'cover', border: '1px solid #dee2e6' }} />
-                                            <h3 className="mt-3">{user?.username}</h3> {/* Display username from context */}
-                                            <p className="text-muted">{profile?.headline || 'No headline set'}</p>
-                                        </div>
-                                        <p><Briefcase size={16} className="me-2 text-primary" /> <Badge bg="info" className="fs-6">{profile?.user_type}</Badge></p>
-                                        <hr/>
-                                        <h5>About</h5>
-                                        <p>{profile?.bio || <span className="text-muted">No bio provided.</span>}</p>
-                                        <Row className="mb-3">
-                                             <Col md={6}><MapPin size={16} className="me-2 text-muted" /> {profile?.country || <span className="text-muted">Country not set</span>}</Col>
-                                             <Col md={6}><Clock size={16} className="me-2 text-muted" /> {profile?.timezone || <span className="text-muted">Timezone not set</span>}</Col>
-                                        </Row>
-                                        {profile?.portfolio_link && (
-                                            <p><LinkIcon size={16} className="me-2 text-muted" /> <a href={profile?.portfolio_link} target="_blank" rel="noopener noreferrer">Portfolio</a></p>
-                                        )}
-                                        {profile?.user_type === 'freelancer' && (
-                                            <>
-                                                <p><DollarSign size={16} className="me-2 text-success" /> <strong>Hourly Rate:</strong> {profile?.hourly_rate ? `₹${profile.hourly_rate}` : <span className="text-muted">Not set</span>}</p>
-                                                <hr/>
-                                                <h5><Tags size={16} className="me-1"/> Skills</h5>
-                                                <div>
-                                                    {profile?.skills?.length > 0 ? profile.skills.map(skill => (
-                                                        <Badge key={skill.id} pill bg="light" text="dark" className="me-1 mb-1 border">{skill.name}</Badge>
-                                                    )) : <span className="text-muted">No skills added.</span>}
-                                                </div>
-                                                <hr/>
-                                                 {/* Portfolio Items Section (remains the same) */}
-                                                 <div className="d-flex justify-content-between align-items-center mb-2">
-                                                    <h5>Portfolio Items</h5>
-                                                    <Button variant="outline-success" size="sm" onClick={handleAddPortfolioItem}>
-                                                        <Plus size={16} className="me-1"/> Add Item
-                                                    </Button>
-                                                </div>
-                                                 {profile?.portfolio_items?.length > 0 ? (
-                                                    <ListGroup variant="flush">
-                                                        {profile.portfolio_items.map(item => (
-                                                            <ListGroup.Item key={item.id} className="d-flex justify-content-between align-items-start">
-                                                                 <div className="me-auto">
-                                                                     <div className="fw-bold">{item.title}</div>
-                                                                     <small className="text-muted">{item.description}</small>
-                                                                     {/* --- THIS IS THE FIX --- */}
-                                                                     {item.link && <><br/><a href={item.link} target="_blank" rel="noopener noreferrer"><LinkIcon size={12} /> View Link</a></>}
-                                                                     {/* --- END FIX --- */}
-                                                                      {item.image && <><br/><Image src={getFullImageUrl(item.image)} thumbnail width={80} className="mt-1" /></>}
-                                                                 </div>
-                                                                <div>
-                                                                     <Button variant="link" size="sm" onClick={() => handleEditPortfolioItem(item)} title="Edit Item"><Edit size={16} /></Button>
-                                                                    <Button variant="link" size="sm" className="text-danger" onClick={() => handleDeletePortfolioItem(item.id)} title="Delete Item"><Trash2 size={16} /></Button>
-                                                                </div>
-                                                            </ListGroup.Item>
-                                                        ))}
-                                                    </ListGroup>
-                                                ) : (
-                                                    <p className="text-muted">No portfolio items added yet.</p>
-                                                )}
-
-                                            </>
-                                        )}
+                                        {/* ...existing code... */}
                                     </>
                                 )}
                             </Card.Body>
@@ -452,7 +356,7 @@ const ProfilePage = () => {
             </Container>
 
             {/* Portfolio Item Modal */}
-             <PortfolioItemModal
+            <PortfolioItemModal
                 show={showPortfolioModal}
                 handleClose={() => setShowPortfolioModal(false)}
                 item={editingPortfolioItem}

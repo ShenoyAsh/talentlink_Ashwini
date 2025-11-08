@@ -117,22 +117,21 @@ class ProjectSerializer(serializers.ModelSerializer):
     """ Serializer for Project model. """
     client = serializers.StringRelatedField(read_only=True)
     skills_required = SkillSerializer(many=True, read_only=True)
-    # Allows setting/updating required skills using a list of Skill IDs
     skill_ids = serializers.PrimaryKeyRelatedField(
         queryset=Skill.objects.all(), many=True, write_only=True,
-        source='skills_required', required=False # Optional on update/create
+        source='skills_required', required=False
     )
-    # Allows creating new skills by name when posting/editing projects
     new_skill_names = serializers.ListField(
         child=serializers.CharField(max_length=100), write_only=True, required=False,
         help_text="List of new skill names to create and add to project."
     )
+    image = serializers.ImageField(required=False, allow_null=True, use_url=True)
     is_saved = serializers.SerializerMethodField()
     analytics = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
-        fields = '__all__' # Include all fields from the model
+        fields = '__all__'
         read_only_fields = ('id', 'client', 'created_at', 'updated_at', 'view_count')
 
     def get_is_saved(self, obj):
@@ -156,16 +155,15 @@ class ProjectSerializer(serializers.ModelSerializer):
             return None
 
     def create(self, validated_data):
-        # Extract new skill names if provided
         new_skill_names = validated_data.pop('new_skill_names', [])
         skills_required = validated_data.pop('skills_required', [])
+        image = validated_data.pop('image', None)
         project = Project.objects.create(**validated_data)
-
-        # Add existing skills
+        if image:
+            project.image = image
+            project.save(update_fields=['image'])
         if skills_required:
             project.skills_required.set(skills_required)
-
-        # Create and add new skills
         skill_objs = []
         for name in new_skill_names:
             name_stripped = name.strip()
@@ -177,19 +175,18 @@ class ProjectSerializer(serializers.ModelSerializer):
                 skill_objs.append(skill)
         if skill_objs:
             project.skills_required.add(*skill_objs)
-
         return project
 
     def update(self, instance, validated_data):
         new_skill_names = validated_data.pop('new_skill_names', [])
         skills_required = validated_data.pop('skills_required', None)
+        image = validated_data.pop('image', None)
         instance = super().update(instance, validated_data)
-
-        # Update existing skills if provided
+        if image is not None:
+            instance.image = image
+            instance.save(update_fields=['image'])
         if skills_required is not None:
             instance.skills_required.set(skills_required)
-
-        # Create and add new skills
         skill_objs = []
         for name in new_skill_names:
             name_stripped = name.strip()
@@ -201,7 +198,6 @@ class ProjectSerializer(serializers.ModelSerializer):
                 skill_objs.append(skill)
         if skill_objs:
             instance.skills_required.add(*skill_objs)
-
         return instance
 
 
@@ -211,15 +207,21 @@ class ProposalSerializer(serializers.ModelSerializer):
     project_title = serializers.CharField(source='project.title', read_only=True)
     # Allows associating with a project by its ID during creation
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.filter(status='active')) # Only allow proposing on active projects
+    rating = serializers.IntegerField(required=False, min_value=1, max_value=5, allow_null=True)
 
     class Meta:
         model = Proposal
         fields = (
             'id', 'project', 'project_title', 'freelancer', 'cover_letter',
-            'proposed_rate', 'status', 'submitted_at', 'time_available', 'additional_info'
+            'proposed_rate', 'status', 'submitted_at', 'time_available', 'additional_info', 'rating'
         )
         # Fields determined by the system or read-only context
         read_only_fields = ('id', 'freelancer', 'project_title', 'submitted_at', 'status')
+
+    def validate_rating(self, value):
+        if value is not None and (value < 1 or value > 5):
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return value
 
 
 class ContractSerializer(serializers.ModelSerializer):

@@ -260,6 +260,7 @@ const NotificationBell = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [showOffcanvas, setShowOffcanvas] = useState(false);
     const [loading, setLoading] = useState(false);
+    const audioRef = useRef(null);
 
     const fetchNotifications = async () => {
         if (!user) return;
@@ -267,10 +268,14 @@ const NotificationBell = () => {
         // setLoading(true);
         try {
             // Fetch only unread count for the badge initially or during polls
-            const response = await axiosInstance.get('/notifications/?read=false'); // Adjust if backend doesn't support this filter
+            const response = await axiosInstance.get('/notifications/?read=false');
             const unread = response.data.results || response.data;
-            const count = Array.isArray(unread) ? unread.length : (response.data.count !== undefined ? response.data.count : 0); // Handle direct count or list length
+            const count = Array.isArray(unread) ? unread.length : (response.data.count !== undefined ? response.data.count : 0);
 
+            // Play sound if new notifications arrived
+            if (count > unreadCount && audioRef.current) {
+                audioRef.current.play();
+            }
             // Only update state if the count actually changed
             if (count !== unreadCount) {
                 setUnreadCount(count);
@@ -339,6 +344,8 @@ const NotificationBell = () => {
 
     return (
         <>
+            {/* Notification sound element (hidden) */}
+            <audio ref={audioRef} src="/notification.mp3" preload="auto" style={{ display: 'none' }} />
             <Nav.Link onClick={handleToggleOffcanvas} className="position-relative">
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -1005,6 +1012,9 @@ const ProjectCreatePage = () => {
     // New state for typed skill names
     const [newSkillNames, setNewSkillNames] = useState([]);
     const [newSkillInput, setNewSkillInput] = useState('');
+    // Image upload state
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
     const { axiosInstance } = useAuth();
     const navigate = useNavigate();
 
@@ -1026,16 +1036,19 @@ const ProjectCreatePage = () => {
     const handleCreateProject = async () => {
         setLoading(true);
         try {
-            await axiosInstance.post('/projects/', {
-                title,
-                description,
-                budget,
-                duration: duration || null,
-                skill_ids: skills,
-                new_skill_names: newSkillNames,
-                time_slot: timeSlot,
-                deadline: deadline || null,
-            });
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('budget', budget);
+            formData.append('duration', duration || '');
+            skills.forEach(id => formData.append('skill_ids', id));
+            newSkillNames.forEach(name => formData.append('new_skill_names', name));
+            formData.append('time_slot', timeSlot);
+            formData.append('deadline', deadline || '');
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+            await axiosInstance.post('/projects/', formData);
             alert('Project created successfully!');
             navigate('/dashboard');
         } catch (error) {
@@ -1069,7 +1082,7 @@ const ProjectCreatePage = () => {
                                     <Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required placeholder="Describe your project..." />
                                 </Form.Group>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Budget (₹) *</Form.Label>
+                                    <Form.Label>Budget (9) *</Form.Label>
                                     <Form.Control type="number" step="0.01" value={budget} onChange={e => setBudget(e.target.value)} required placeholder="e.g., 5000.00" />
                                 </Form.Group>
                                 <Form.Group className="mb-3">
@@ -1142,6 +1155,24 @@ const ProjectCreatePage = () => {
                                         ))}
                                     </div>
                                     <Form.Text className="text-muted">You can add skills not listed above.</Form.Text>
+                                </Form.Group>
+                                {/* Project Image Upload */}
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Project Image (Optional)</Form.Label>
+                                    <Form.Control type="file" accept="image/*" onChange={e => {
+                                        const file = e.target.files[0];
+                                        setImageFile(file);
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => setImagePreview(reader.result);
+                                            reader.readAsDataURL(file);
+                                        } else {
+                                            setImagePreview(null);
+                                        }
+                                    }} />
+                                    {imagePreview && (
+                                        <div className="mt-2"><img src={imagePreview} alt="Preview" style={{ maxWidth: '200px', maxHeight: '150px' }} /></div>
+                                    )}
                                 </Form.Group>
                                 <Button variant="primary" type="submit" className="w-100" disabled={loading}>
                                     {loading ? <Spinner as="span" animation="border" size="sm" /> : 'Post Project'}
@@ -1294,22 +1325,47 @@ const DashboardPage = () => {
             <Card className="mb-4 shadow-sm">
                 <Card.Header as="h5">Proposals Received</Card.Header>
                 {loadingProposals ? <Card.Body className="text-center"><Spinner size="sm"/></Card.Body> :
-                 error && !updateError ? <Card.Body><Alert variant="danger">{error}</Alert></Card.Body> : // Show general error only if no update error
+                 error && !updateError ? <Card.Body><Alert variant="danger">{error}</Alert></Card.Body> :
                  proposals.length > 0 ? (
                     <ListGroup variant="flush">
                         {proposals.map(p => (
                             <ListGroup.Item key={p.id} className="px-3 py-2">
-                                <Row className="align-items-center g-2"> {/* Use g-2 for smaller gap */}
+                                <Row className="align-items-center g-2">
                                     <Col md={7}>
                                          Proposal from <strong>{p.freelancer}</strong> for <Link to={`/project/${p.project}`} title={p.project_title}>"{p.project_title.length > 30 ? p.project_title.substring(0, 30)+'...' : p.project_title}"</Link>
                                          <br/><small className="text-muted">Rate: ₹{p.proposed_rate}</small>
+                                         {/* Rating UI */}
+                                         <div className="mt-2">
+                                             <Form.Label className="me-2 mb-0">Rating:</Form.Label>
+                                             <Form.Select
+                                                 size="sm"
+                                                 style={{ width: '120px', display: 'inline-block' }}
+                                                 value={p.rating || ''}
+                                                 onChange={async (e) => {
+                                                     const newRating = e.target.value ? parseInt(e.target.value) : null;
+                                                     try {
+                                                         await axiosInstance.patch(`/proposals/${p.id}/rate/`, { rating: newRating });
+                                                         fetchDashboardData();
+                                                         alert('Rating updated!');
+                                                     } catch (err) {
+                                                         alert('Failed to update rating.');
+                                                     }
+                                                 }}
+                                                 disabled={user.username !== p.project_client}
+                                             >
+                                                 <option value="">Not rated</option>
+                                                 {[1,2,3,4,5].map(val => (
+                                                     <option key={val} value={val}>{val} Star{val > 1 ? 's' : ''}</option>
+                                                 ))}
+                                             </Form.Select>
+                                         </div>
                                     </Col>
                                      <Col md={2} className="text-md-center">
                                           <Badge bg={p.status === 'pending' ? 'warning' : (p.status === 'accepted' ? 'success' : 'danger')}>{p.status}</Badge>
                                     </Col>
                                     <Col md={3} className="text-md-end">
                                          {p.status === 'pending' && (
-                                            <div className="d-flex justify-content-end justify-content-md-end gap-1"> {/* Flex layout for buttons */}
+                                            <div className="d-flex justify-content-end justify-content-md-end gap-1">
                                                 <Button variant="success" size="sm" onClick={() => handleUpdateStatus(p.id, 'accepted')} title="Accept Proposal">
                                                     <Check size={16} /> <span className="d-none d-lg-inline">Accept</span>
                                                 </Button>

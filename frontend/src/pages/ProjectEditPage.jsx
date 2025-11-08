@@ -21,9 +21,12 @@ const ProjectEditPage = () => {
     const [deadline, setDeadline] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-        // New state for typed skill names
-        const [newSkillNames, setNewSkillNames] = useState([]);
-        const [newSkillInput, setNewSkillInput] = useState('');
+    // New state for typed skill names
+    const [newSkillNames, setNewSkillNames] = useState([]);
+    const [newSkillInput, setNewSkillInput] = useState('');
+    // Image upload state
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
 
     useEffect(() => {
         const fetchProjectAndSkills = async () => {
@@ -59,6 +62,12 @@ const ProjectEditPage = () => {
                 setDeadline(projectData.deadline || '');
                 setSelectedSkills(projectData.skills_required.map(skill => skill.id));
                 setAvailableSkills(skillsRes.data.results || skillsRes.data);
+                // Set image preview if project has image
+                if (projectData.image) {
+                    setImagePreview(projectData.image.startsWith('http') ? projectData.image : `${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}${projectData.image}`);
+                } else {
+                    setImagePreview(null);
+                }
 
             } catch (err) {
                 setError('Failed to fetch project details or skills.');
@@ -98,18 +107,21 @@ const ProjectEditPage = () => {
         setLoading(true);
         setError('');
         try {
-                await axiosInstance.put(`/projects/${projectId}/`, {
-                    title,
-                    description,
-                    budget,
-                    duration: duration || null,
-                    skill_ids: selectedSkills,
-                    new_skill_names: newSkillNames,
-                    time_slot: timeSlot,
-                    deadline: deadline || null,
-                });
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('description', description);
+            formData.append('budget', budget);
+            formData.append('duration', duration || '');
+            selectedSkills.forEach(id => formData.append('skill_ids', id));
+            newSkillNames.forEach(name => formData.append('new_skill_names', name));
+            formData.append('time_slot', timeSlot);
+            formData.append('deadline', deadline || '');
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+            await axiosInstance.put(`/projects/${projectId}/`, formData);
             alert('Project updated successfully!');
-            navigate(`/project/${projectId}`); // Navigate back to project detail
+            navigate(`/project/${projectId}`);
         } catch (error) {
             setError(`Failed to update project: ${JSON.stringify(error.response?.data) || 'Server error'}`);
             console.error('Update project error:', error.response?.data || error.message);
@@ -185,6 +197,24 @@ const ProjectEditPage = () => {
                                     </Form.Group>
                                 </Col>
                             </Row>
+                            {/* Project Image Upload */}
+                            <Form.Group className="mb-3">
+                                <Form.Label>Project Image (Optional)</Form.Label>
+                                <Form.Control type="file" accept="image/*" onChange={e => {
+                                    const file = e.target.files[0];
+                                    setImageFile(file);
+                                    if (file) {
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => setImagePreview(reader.result);
+                                        reader.readAsDataURL(file);
+                                    } else {
+                                        setImagePreview(null);
+                                    }
+                                }} />
+                                {imagePreview && (
+                                    <div className="mt-2"><img src={imagePreview} alt="Preview" style={{ maxWidth: '200px', maxHeight: '150px' }} /></div>
+                                )}
+                            </Form.Group>
                             <Button type="submit" variant="primary" disabled={loading}>
                                 <Save size={16} className="me-1"/>
                                 {loading ? <Spinner as="span" size="sm" /> : 'Save Changes'}
