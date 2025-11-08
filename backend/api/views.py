@@ -284,57 +284,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(project)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['get'], url_path='download')
-    def download_invoice(self, request, pk=None):
-        """
-        Generate and return a PDF version of the invoice.
-        """
-        invoice = self.get_object()
-
-        # Check permission
-        if invoice.client != request.user and invoice.freelancer != request.user:
-            raise PermissionDenied("You do not have permission to download this invoice.")
-
-        # Get related data for the template
-        try:
-            client_profile = invoice.client.profile
-        except Profile.DoesNotExist:
-            client_profile = None
-
-        try:
-            freelancer_profile = invoice.freelancer.profile
-        except Profile.DoesNotExist:
-            freelancer_profile = None
-
-        # Calculate tax amount for the template
-        tax_amount = (invoice.amount * invoice.tax_rate) / 100
-
-        # Get the template
-        template = get_template('pdf/invoice.html')
-        context = {
-            'invoice': invoice,
-            'project_title': invoice.project.title, # Pass project title
-            'client_profile': client_profile,
-            'freelancer_profile': freelancer_profile,
-            'tax_amount': tax_amount,
-        }
-        html = template.render(context)
-
-        # Create a file-like buffer to receive PDF data
-        result = io.BytesIO()
-
-        # Convert HTML to PDF
-        pdf = pisa.pisaDocument(io.BytesIO(html.encode("UTF-8")), result)
-
-        if not pdf.err:
-            # PDF generation success
-            response = HttpResponse(result.getvalue(), content_type='application/pdf')
-            # This header tells the browser to download the file
-            response['Content-Disposition'] = f'attachment; filename="invoice-{invoice.invoice_number}.pdf"'
-            return response
-
-        # PDF generation failed
-        return Response({'detail': f'Error generating PDF: {pdf.err}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
 
 
 
@@ -1088,6 +1038,58 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(invoice)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='download')
+    def download_invoice(self, request, pk=None):
+        """
+        Generate and return a PDF version of the invoice.
+        """
+        invoice = self.get_object()
+
+        # Check permission
+        if invoice.client != request.user and invoice.freelancer != request.user:
+            raise PermissionDenied("You do not have permission to download this invoice.")
+
+        # Get related data for the template
+        try:
+            client_profile = invoice.client.profile
+        except Profile.DoesNotExist:
+            client_profile = None
+
+        try:
+            freelancer_profile = invoice.freelancer.profile
+        except Profile.DoesNotExist:
+            freelancer_profile = None
+
+        # Calculate tax amount for the template
+        tax_amount = (invoice.amount * invoice.tax_rate) / 100
+
+        # Get the template
+        template = get_template('pdf/invoice.html')
+        context = {
+            'invoice': invoice,
+            'project_title': invoice.project.title, # Pass project title
+            'client_profile': client_profile,
+            'freelancer_profile': freelancer_profile,
+            'tax_amount': tax_amount,
+        }
+        html = template.render(context)
+
+        # Create a file-like buffer to receive PDF data
+        result = io.BytesIO()
+
+        # Convert HTML to PDF
+        pdf = pisa.pisaDocument(io.BytesIO(html.encode("UTF-8")), result)
+
+        if not pdf.err:
+            # PDF generation success
+            response = HttpResponse(result.getvalue(), content_type='application/pdf')
+            # This header tells the browser to download the file
+            response['Content-Disposition'] = f'attachment; filename="invoice-{invoice.invoice_number}.pdf"'
+            return response
+
+        # PDF generation failed
+        return Response({'detail': f'Error generating PDF: {pdf.err}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class WalletViewSet(viewsets.ReadOnlyModelViewSet):
