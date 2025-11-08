@@ -1,16 +1,20 @@
-{% extends "emails/notification_base.html" %}
 
 {% block content %}
-<p>Hi {{ recipient_name }},</p>
-
-<p>You have received a new message from <strong>{{ sender_name }}</strong>.</p>
-
-<div style="background-color: #f4f4f4; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
-    <p style="margin: 0; white-space: pre-wrap;">{{ message_content|truncatewords:50 }}</p>
-</div>
-
-<p>To reply, please log in to your TalentLink account and visit your messages page.</p>
-<a href="http://localhost:5173/messages" class="button">View Message</a>
-
-<p style="margin-top: 30px;">Thanks,<br>The TalentLink Team</p>
+  <h2 style="font-size: 20px; color: #333;">You Have a New Message</h2>
+  <p style="font-size: 16px; color: #555;">
+    Hi {{ user_name }},
+  </p>
+  <p style="font-size: 16px; color: #555;">
+    You have received a new message from <strong>{{ sender_name }}</strong>.
+  </p>
+  <p style="font-size: 16px; color: #555;">
+    <a href="{{ site_url }}/messages" class="button-link">View Message</a>
+  </p>
+  <p style="font-size: 16px; color: #555;">
+    Please log in to your account to read and reply to the message.
+  </p>
+  <p style="font-size: 16px; color: #555;">
+    Thank you,<br>
+    The TalentLink Team
+  </p>
 {% endblock %}

@@ -407,15 +407,35 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class InvoiceSerializer(serializers.ModelSerializer):
     """Serializer for Invoice model."""
-    project = serializers.StringRelatedField(read_only=True)
+
+    # For READING (GET)
+    project_title = serializers.StringRelatedField(source='project', read_only=True)
     milestone = serializers.StringRelatedField(read_only=True)
     freelancer = serializers.StringRelatedField(read_only=True)
     client = serializers.StringRelatedField(read_only=True)
 
+    # For WRITING (POST) - This accepts the project ID
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects.all()
+    )
+
+    # Match model migration 0015 which allows due_date to be optional
+    due_date = serializers.DateField(required=False, allow_null=True)
+
     class Meta:
         model = Invoice
-        fields = '__all__'
-        read_only_fields = ('id', 'invoice_number', 'created_at', 'paid_at')
+        # List fields explicitly
+        fields = (
+            'id', 'project', 'project_title', 'milestone', 'freelancer', 'client',
+            'invoice_number', 'amount', 'tax_rate', 'total_amount', 'status',
+            'due_date', 'description', 'created_at', 'paid_at'
+        )
+        # 'project' is now writable
+        read_only_fields = (
+            'id', 'invoice_number', 'created_at', 'paid_at',
+            'project_title', 'milestone', 'freelancer', 'client',
+            'total_amount', 'status' # Status defaults to 'draft'
+        )
 
 
 class WalletSerializer(serializers.ModelSerializer):

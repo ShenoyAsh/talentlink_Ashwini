@@ -1,0 +1,10 @@
+Hi {{ username }},
+
+Don't miss out on what's new on TalentLink! New projects and talented freelancers are joining every day.
+
+Log in to discover your next opportunity or find the perfect talent for your job.
+
+Visit TalentLink: {{ frontend_url|default:'http://localhost:5173' }}
+
+See you soon,
+The TalentLink Team

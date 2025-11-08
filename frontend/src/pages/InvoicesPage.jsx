@@ -1,8 +1,8 @@
 // frontend/src/pages/InvoicesPage.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Table, Badge, Button, Modal, Form, Alert, Spinner } from 'react-bootstrap';
-import { FileText, Plus, Download, CheckCircle } from 'lucide-react';
 import { useAuth } from '../App';
+import { Container, Card, Table, Badge, Button, Modal, Form, Alert, Spinner, Dropdown } from 'react-bootstrap';
+import { FileText, Plus, Download, CheckCircle, Edit, Send, Clock, XCircle } from 'lucide-react';
 
 const InvoicesPage = () => {
     const { user, axiosInstance } = useAuth();
@@ -50,6 +50,18 @@ const InvoicesPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        if (!formData.project) {
+            setError('Please select a project.');
+            return;
+        }
+        if (!formData.amount || parseFloat(formData.amount) <= 0) {
+            setError('Please enter a valid amount.');
+            return;
+        }
+        if (!formData.due_date) {
+            setError('Please select a due date.');
+            return;
+        }
         try {
             await axiosInstance.post('/invoices/', {
                 ...formData,
@@ -64,18 +76,62 @@ const InvoicesPage = () => {
         }
     };
 
-    const getStatusBadge = (status) => {
-        const variants = {
-            draft: 'secondary',
-            sent: 'info',
-            paid: 'success',
-            overdue: 'danger',
-            cancelled: 'dark'
-        };
-        return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
+   const getStatusBadge = (status) => {
+    const variants = {
+        draft: { bg: 'secondary', icon: <Edit size={14} />, text: 'Draft' },
+        sent: { bg: 'info', icon: <Send size={14} />, text: 'Sent' },
+        paid: { bg: 'success', icon: <CheckCircle size={14} />, text: 'Paid' },
+        overdue: { bg: 'danger', icon: <Clock size={14} />, text: 'Overdue' },
+        cancelled: { bg: 'dark', icon: <XCircle size={14} />, text: 'Cancelled' }
     };
+    const config = variants[status] || variants.draft;
+    return (
+        <Badge bg={config.bg} className="d-flex align-items-center" style={{ cursor: 'pointer' }}>
+            {config.icon} <span className="ms-1">{config.text}</span>
+        </Badge>
+    );
+};
 
-    if (loading) return <Container className="text-center py-5"><Spinner animation="border" /></Container>;
+const handleDownload = async (invoice) => {
+    // Use the invoice object, especially invoice.invoice_number for the filename
+    try {
+        const response = await axiosInstance.get(`/invoices/${invoice.id}/download/`, {
+            responseType: 'blob', // IMPORTANT: Tell axios to expect binary data
+        });
+
+        // Create a Blob from the PDF stream
+        const file = new Blob(
+            [response.data], 
+            { type: 'application/pdf' }
+        );
+
+        // Create a link element, force the download
+        const fileURL = URL.createObjectURL(file);
+        const link = document.createElement('a');
+        link.href = fileURL;
+        link.setAttribute('download', `invoice-${invoice.invoice_number}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+
+        // Clean up
+        link.parentNode.removeChild(link);
+        URL.revokeObjectURL(fileURL);
+
+    } catch (err) {
+        setError('Failed to download invoice. Please try again.');
+        console.error(err);
+    }
+};
+
+const handleStatusUpdate = async (invoiceId, newStatus) => {
+        try {
+            // This URL must match the @action in views.py
+            await axiosInstance.patch(`/invoices/${invoiceId}/update-status/`, { status: newStatus });
+            fetchInvoices(); // Refresh the list after update
+        } catch (err) {
+            setError(err.response?.data?.detail || 'Failed to update status.');
+        }
+    };
 
     return (
         <Container className="py-5 animate-fade-in">
@@ -96,7 +152,7 @@ const InvoicesPage = () => {
                         <Table responsive>
                             <thead>
                                 <tr>
-                                    <th>Invoice #</th>
+                                    <th>Invoice Number</th>
                                     <th>Project</th>
                                     <th>Amount</th>
                                     <th>Total</th>
@@ -105,23 +161,55 @@ const InvoicesPage = () => {
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {invoices.map(inv => (
-                                    <tr key={inv.id}>
-                                        <td><strong>{inv.invoice_number}</strong></td>
-                                        <td>{inv.project}</td>
-                                        <td>₹{parseFloat(inv.amount).toFixed(2)}</td>
-                                        <td className="fw-bold">₹{parseFloat(inv.total_amount).toFixed(2)}</td>
-                                        <td>{new Date(inv.due_date).toLocaleDateString()}</td>
-                                        <td>{getStatusBadge(inv.status)}</td>
-                                        <td>
-                                            <Button variant="outline-primary" size="sm">
-                                                <Download size={16} />
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
+                           <tbody>
+    {invoices.map(inv => (
+        <tr key={inv.id}>
+            <td><strong>{inv.invoice_number}</strong></td>
+
+            {/* FIX 1: Use project_title, not project */}
+            <td>{inv.project_title}</td>
+
+            <td>₹{parseFloat(inv.amount).toFixed(2)}</td>
+            <td className="fw-bold">₹{parseFloat(inv.total_amount).toFixed(2)}</td>
+
+            {/* Fix for potentially null due_date */}
+            <td>{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : 'N/A'}</td>
+
+            {/* FIX 2: Status Dropdown */}
+            <td>
+                <Dropdown>
+                    <Dropdown.Toggle as="div" style={{ border: 'none', background: 'transparent', padding: 0 }}>
+                        {getStatusBadge(inv.status)}
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu>
+                        <Dropdown.Item onClick={() => handleStatusUpdate(inv.id, 'draft')}>
+                            <Edit size={14} className="me-2" /> Mark as Draft
+                        </Dropdown.Item>
+                        <Dropdown.Item onClick={() => handleStatusUpdate(inv.id, 'sent')}>
+                            <Send size={14} className="me-2" /> Mark as Sent
+                        </Dropdown.Item>
+                        <Dropdown.Item onClick={() => handleStatusUpdate(inv.id, 'paid')}>
+                            <CheckCircle size={14} className="me-2" /> Mark as Paid
+                        </Dropdown.Item>
+                        <Dropdown.Item onClick={() => handleStatusUpdate(inv.id, 'overdue')}>
+                            <Clock size={14} className="me-2" /> Mark as Overdue
+                        </Dropdown.Item>
+                        <Dropdown.Item onClick={() => handleStatusUpdate(inv.id, 'cancelled')}>
+                            <XCircle size={14} className="me-2" /> Mark as Cancelled
+                        </Dropdown.Item>
+                    </Dropdown.Menu>
+                </Dropdown>
+            </td>
+
+            {/* FIX 3: Download Button onClick */}
+            <td>
+               <Button variant="outline-primary" size="sm" onClick={() => handleDownload(inv)}>
+    <Download size={16} />
+</Button>
+            </td>
+        </tr>
+    ))}
+</tbody>
                         </Table>
                     ) : (
                         <p className="text-muted text-center py-4">No invoices yet.</p>

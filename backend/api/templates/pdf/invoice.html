@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice {{ invoice.invoice_number }}</title>
+    <style>
+        @page {
+            size: a4 portrait;
+            margin: 1.5cm 1cm;
+        }
+        body {
+            font-family: "Helvetica", "Arial", sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            width: 100%;
+            margin: 0 auto;
+            padding: 1cm;
+        }
+        .header {
+            display: block;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #667eea;
+            margin: 0;
+            padding: 0;
+            font-size: 28px;
+        }
+        .company-details {
+            text-align: right;
+        }
+        .invoice-details, .party-details {
+            margin-bottom: 30px;
+        }
+        .invoice-details table, .party-details table {
+            width: 100%;
+        }
+        .party-details .client-details {
+            width: 50%;
+            text-align: left;
+        }
+        .party-details .freelancer-details {
+            width: 50%;
+            text-align: right;
+        }
+        th {
+            text-align: left;
+            padding: 8px;
+            background-color: #f4f4f4;
+            border-bottom: 1px solid #ddd;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        .items-table .description {
+            width: 60%;
+        }
+        .items-table .amount {
+            text-align: right;
+        }
+        .summary-table {
+            width: 40%;
+            margin-left: 60%;
+            border-collapse: collapse;
+        }
+        .summary-table td {
+            border: none;
+        }
+        .summary-table .total {
+            background-color: #f4f4f4;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .summary-table .total td {
+            padding: 10px 8px;
+        }
+        .footer {
+            text-align: center;
+            font-size: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div id="footer">
+        <p class="footer">
+            Thank you for your business! | TalentLink | Page <pdf:pagenumber>
+        </p>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <table>
+                <tr>
+                    <td style="border:none;"><h1>INVOICE</h1></td>
+                    <td style="border:none; text-align: right;">
+                        <strong>TalentLink</strong><br>
+                        123 Freelance St.<br>
+                        Work City, 12345
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="invoice-details">
+            <table>
+                <tr>
+                    <td style="border:none;">
+                        <strong>Invoice #:</strong> {{ invoice.invoice_number }}<br>
+                        <strong>Date Issued:</strong> {{ invoice.created_at|date:"F d, Y" }}<br>
+                        <strong>Date Due:</strong> {{ invoice.due_date|date:"F d, Y" }}
+                    </td>
+                    <td style="border:none; text-align: right; font-size: 1.5em; color: #667eea;">
+                        <strong>Status: {{ invoice.status|upper }}</strong>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="party-details">
+            <table>
+                <tr>
+                    <td class="client-details" style="border:none;">
+                        <strong>BILLED TO:</strong><br>
+                        {{ invoice.client.username }}<br>
+                        {{ client_profile.bio|default_if_none:''|truncatewords:10 }}<br>
+                        {{ invoice.client.email }}
+                    </td>
+                    <td class="freelancer-details" style="border:none;">
+                        <strong>FROM:</strong><br>
+                        {{ invoice.freelancer.username }}<br>
+                        {{ freelancer_profile.headline|default_if_none:'' }}<br>
+                        {{ invoice.freelancer.email }}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th class="amount">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="description">
+                        <strong>{{ invoice.project_title }}</strong><br>
+                        <small>{{ invoice.description|default_if_none:'' }}</small>
+                    </td>
+                    <td class="amount">₹{{ invoice.amount|floatformat:2 }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <table class="summary-table">
+            <tr>
+                <td>Subtotal</td>
+                <td class="amount">₹{{ invoice.amount|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Tax ({{ invoice.tax_rate|floatformat:2 }}%)</td>
+                <td class="amount">₹{{ tax_amount|floatformat:2 }}</td>
+            </tr>
+            <tr class="total">
+                <td>Total</td>
+                <td class="amount">₹{{ invoice.total_amount|floatformat:2 }}</td>
+            </tr>
+        </table>
+
+    </div>
+</body>
+</html>

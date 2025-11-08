@@ -1,0 +1,15 @@
+{% extends "emails/notification_base.html" %}
+
+{% block content %}
+<p>Hi {{ username }},</p>
+
+<p>Don't miss out on what's new on TalentLink! New projects and talented freelancers are joining every day.</p>
+
+<p>Log in to discover your next opportunity or find the perfect talent for your job.</p>
+
+<p style="text-align: center; margin-top: 30px;">
+    <a href="{{ frontend_url|default:'http://localhost:5173' }}" class="button">Visit TalentLink</a>
+</p>
+
+<p style="margin-top: 30px;">See you soon,<br>The TalentLink Team</p>
+{% endblock %}

@@ -26,24 +26,17 @@ from django.contrib.auth import get_user_model # Import User model getter
 from django.shortcuts import get_object_or_404 # Useful for getting objects or 404
 import logging # Import logging
 from django.utils import timezone
+import io
+from django.http import HttpResponse
+from django.template.loader import get_template
+from xhtml2pdf import pisa
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
-
-# Get the User model
 User = get_user_model()
 
-
-# --- Permission Classes ---
-# ... (IsOwnerOrReadOnly, IsClient, IsFreelancer remain the same) ...
 class IsOwnerOrReadOnly(permissions.BasePermission):
-    """
-    Custom permission to only allow owners of an object to edit it.
-    Assumes the model instance has an 'user', 'profile.user', 'client',
-    'freelancer', 'reviewer', or 'recipient' attribute.
-    Handles Proposal specific logic (only editable if pending).
-    """
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
             return True
@@ -290,6 +283,58 @@ class ProjectViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(project)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='download')
+    def download_invoice(self, request, pk=None):
+        """
+        Generate and return a PDF version of the invoice.
+        """
+        invoice = self.get_object()
+
+        # Check permission
+        if invoice.client != request.user and invoice.freelancer != request.user:
+            raise PermissionDenied("You do not have permission to download this invoice.")
+
+        # Get related data for the template
+        try:
+            client_profile = invoice.client.profile
+        except Profile.DoesNotExist:
+            client_profile = None
+
+        try:
+            freelancer_profile = invoice.freelancer.profile
+        except Profile.DoesNotExist:
+            freelancer_profile = None
+
+        # Calculate tax amount for the template
+        tax_amount = (invoice.amount * invoice.tax_rate) / 100
+
+        # Get the template
+        template = get_template('pdf/invoice.html')
+        context = {
+            'invoice': invoice,
+            'project_title': invoice.project.title, # Pass project title
+            'client_profile': client_profile,
+            'freelancer_profile': freelancer_profile,
+            'tax_amount': tax_amount,
+        }
+        html = template.render(context)
+
+        # Create a file-like buffer to receive PDF data
+        result = io.BytesIO()
+
+        # Convert HTML to PDF
+        pdf = pisa.pisaDocument(io.BytesIO(html.encode("UTF-8")), result)
+
+        if not pdf.err:
+            # PDF generation success
+            response = HttpResponse(result.getvalue(), content_type='application/pdf')
+            # This header tells the browser to download the file
+            response['Content-Disposition'] = f'attachment; filename="invoice-{invoice.invoice_number}.pdf"'
+            return response
+
+        # PDF generation failed
+        return Response({'detail': f'Error generating PDF: {pdf.err}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -1012,6 +1057,37 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             serializer.save(freelancer=self.request.user, client=project.client)
         else:
             raise PermissionDenied("Only freelancers can create invoices.")
+        
+    @action(detail=True, methods=['patch'], url_path='update-status', permission_classes=[permissions.IsAuthenticated])
+    def update_status(self, request, pk=None):
+        """
+        Allow the client or freelancer to update the invoice status.
+        """
+        invoice = self.get_object()
+
+        # Check if user is client or freelancer for this invoice
+        if invoice.client != request.user and invoice.freelancer != request.user:
+            raise PermissionDenied("Only the client or freelancer on this invoice can update its status.")
+
+        new_status = request.data.get('status')
+        status_choices = [choice[0] for choice in Invoice.STATUS_CHOICES]
+
+        if new_status not in status_choices:
+            return Response({'detail': f'Invalid status. Must be one of {status_choices}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoice.status = new_status
+
+        # Set paid_at date if status is 'paid'
+        if new_status == 'paid':
+            invoice.paid_at = timezone.now()
+        else:
+            # Clear paid_at if status is changed to something else
+            invoice.paid_at = None 
+
+        invoice.save(update_fields=['status', 'paid_at'])
+
+        serializer = self.get_serializer(invoice)
+        return Response(serializer.data)
 
 
 class WalletViewSet(viewsets.ReadOnlyModelViewSet):

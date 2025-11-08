@@ -1,26 +1,14 @@
-Hi {{ recipient_name }},
+Hi {{ freelancer_name }},
 
-{% if status == 'accepted' %}
-Great news! Your proposal for the project "{{ project_title }}" has been accepted by {{ client_name }}.
+Your proposal for the project, "{{ project_title }}", has been {{ status }}.
 
-A new contract has been created. You can view the details and get started by logging into your dashboard.
-View your contract: http://localhost:5173/contracts
-
-{% elif status == 'rejected' %}
-Regarding your proposal for the project "{{ project_title }}":
-
-We appreciate you taking the time to submit a proposal. The client, {{ client_name }}, has decided to move forward with another option for this project.
-
-We encourage you to continue applying for other projects that match your skills.
-Find more projects: http://localhost:5173/projects
-
-{% elif status == 'new_submission' %}
-You have received a new proposal for your project "{{ project_title }}" from the freelancer {{ freelancer_name }}.
-
-You can review this proposal and take action from your project dashboard.
-Go to your dashboard: http://localhost:5173/dashboard
-
+{% if status == "accepted" %}
+Congratulations! A new contract has been created. Please visit your dashboard to view details.
+{% elif status == "rejected" %}
+While this proposal was not selected, we thank you for your time and encourage you to apply for other projects.
 {% endif %}
 
-Thanks,
+View your dashboard: {{ site_url }}/dashboard
+
+Best regards,
 The TalentLink Team

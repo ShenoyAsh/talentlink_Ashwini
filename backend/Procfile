@@ -1,2 +1,1 @@
-web: gunicorn talentlink.wsgi --log-file -
-release: python manage.py migrate
+web: python manage.py migrate && gunicorn talentlink.wsgi --log-file -
