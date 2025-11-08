@@ -675,6 +675,8 @@ class NotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] # Checks recipient
     # Limit allowed methods: GET (list/detail), PATCH (actions), POST (mark all read), DELETE (optional)
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['read']
 
     def get_queryset(self):
         """ Return notifications only for the authenticated user. """

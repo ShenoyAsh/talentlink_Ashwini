@@ -2201,15 +2201,27 @@ const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
 };
 
 // --- NEW FEATURE 5: Badge Display Component ---
-const BadgeDisplay = ({ userId }) => {
+export const BadgeDisplay = ({ userId }) => {
     const { axiosInstance } = useAuth();
     const [badges, setBadges] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    // --- MOVE getBadgeIcon INSIDE ---
+    const getBadgeIcon = (badgeType) => {
+        switch (badgeType) {
+            case 'verified': return <Shield size={16} />;
+            case 'top_freelancer': case 'top_client': return <Trophy size={16} />;
+            case 'excellent_review': return <Star size={16} />;
+            default: return <Award size={16} />;
+        }
+    };
+    // --- END MOVE ---
 
     useEffect(() => {
         const fetchBadges = async () => {
             setLoading(true);
             try {
+                // Use the user ID from props if provided, otherwise fetch for the logged-in user
                 const url = userId ? `/badges/?user_id=${userId}` : '/badges/';
                 const response = await axiosInstance.get(url);
                 setBadges(response.data.results || response.data);
@@ -2220,16 +2232,7 @@ const BadgeDisplay = ({ userId }) => {
             }
         };
         fetchBadges();
-    }, [userId, axiosInstance]);
-
-    const getBadgeIcon = (badgeType) => {
-        switch (badgeType) {
-            case 'verified': return <Shield size={16} />;
-            case 'top_freelancer': case 'top_client': return <Trophy size={16} />;
-            case 'excellent_review': return <Star size={16} />;
-            default: return <Award size={16} />;
-        }
-    };
+    }, [userId, axiosInstance]); // Re-fetch if userId changes
 
     if (loading) return <Spinner size="sm" />;
     if (badges.length === 0) return null;
@@ -2239,7 +2242,7 @@ const BadgeDisplay = ({ userId }) => {
             {badges.map(badge => (
                 <span key={badge.id} className="user-badge" title={badge.description || badge.badge_type}>
                     {getBadgeIcon(badge.badge_type)}
-                    {badge.get_badge_type_display || badge.badge_type.replace('_', ' ')}
+                    {badge.get_badge_type_display || badge.badge_type.replace(/_/g, ' ')}
                 </span>
             ))}
         </div>
@@ -2272,7 +2275,6 @@ function App() {
                         <Route path="/messages" element={<MessagingPage />} />
                         <Route path="/project/new" element={<ProjectCreatePage />} />
                         <Route path="/project/:id/edit" element={<ProjectEditPage />} />
-                        {/* New Feature Routes */}
                         <Route path="/saved-projects" element={<SavedProjectsPage />} />
                         <Route path="/activities" element={<ActivityFeedPage />} />
                         <Route path="/analytics" element={<AnalyticsPage />} />

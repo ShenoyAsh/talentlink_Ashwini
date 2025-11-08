@@ -1,6 +1,6 @@
 // frontend/src/pages/PublicProfilePage.jsx
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../App'; // Use auth to get axiosInstance
+import { useAuth,BadgeDisplay } from '../App'; // Use auth to get axiosInstance
 import { useParams, Link } from 'react-router-dom'; // Import Link
 import { Container, Card, Spinner, Alert, Badge, Row, Col, Image, ListGroup } from 'react-bootstrap';
 import { User, Briefcase, DollarSign, Link as LinkIcon, MapPin, Clock, Check, Tags } from 'lucide-react'; // Added Tags
@@ -61,7 +61,7 @@ const PublicProfilePage = () => {
 
     // Import BadgeDisplay from App.jsx
     // eslint-disable-next-line
-    const BadgeDisplay = require('../App').default?.BadgeDisplay || require('../App').BadgeDisplay;
+    //const BadgeDisplay = require('../App').default?.BadgeDisplay || require('../App').BadgeDisplay;
 
     return (
         <Container className="py-5">

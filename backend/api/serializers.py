@@ -144,7 +144,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_analytics(self, obj):
         """Include analytics data if available."""
         try:
-            analytics = obj.analytics
+            analytics = ProjectAnalytics.objects.get(project=obj)
             return {
                 'total_views': analytics.total_views,
                 'unique_views': analytics.unique_views,
