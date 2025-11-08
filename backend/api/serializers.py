@@ -122,6 +122,11 @@ class ProjectSerializer(serializers.ModelSerializer):
         queryset=Skill.objects.all(), many=True, write_only=True,
         source='skills_required', required=False # Optional on update/create
     )
+    # Allows creating new skills by name when posting/editing projects
+    new_skill_names = serializers.ListField(
+        child=serializers.CharField(max_length=100), write_only=True, required=False,
+        help_text="List of new skill names to create and add to project."
+    )
     is_saved = serializers.SerializerMethodField()
     analytics = serializers.SerializerMethodField()
 
@@ -149,6 +154,55 @@ class ProjectSerializer(serializers.ModelSerializer):
             }
         except ProjectAnalytics.DoesNotExist:
             return None
+
+    def create(self, validated_data):
+        # Extract new skill names if provided
+        new_skill_names = validated_data.pop('new_skill_names', [])
+        skills_required = validated_data.pop('skills_required', [])
+        project = Project.objects.create(**validated_data)
+
+        # Add existing skills
+        if skills_required:
+            project.skills_required.set(skills_required)
+
+        # Create and add new skills
+        skill_objs = []
+        for name in new_skill_names:
+            name_stripped = name.strip()
+            if name_stripped:
+                skill, _ = Skill.objects.get_or_create(
+                    name__iexact=name_stripped,
+                    defaults={'name': name_stripped}
+                )
+                skill_objs.append(skill)
+        if skill_objs:
+            project.skills_required.add(*skill_objs)
+
+        return project
+
+    def update(self, instance, validated_data):
+        new_skill_names = validated_data.pop('new_skill_names', [])
+        skills_required = validated_data.pop('skills_required', None)
+        instance = super().update(instance, validated_data)
+
+        # Update existing skills if provided
+        if skills_required is not None:
+            instance.skills_required.set(skills_required)
+
+        # Create and add new skills
+        skill_objs = []
+        for name in new_skill_names:
+            name_stripped = name.strip()
+            if name_stripped:
+                skill, _ = Skill.objects.get_or_create(
+                    name__iexact=name_stripped,
+                    defaults={'name': name_stripped}
+                )
+                skill_objs.append(skill)
+        if skill_objs:
+            instance.skills_required.add(*skill_objs)
+
+        return instance
 
 
 class ProposalSerializer(serializers.ModelSerializer):

@@ -21,6 +21,9 @@ const ProjectEditPage = () => {
     const [deadline, setDeadline] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+        // New state for typed skill names
+        const [newSkillNames, setNewSkillNames] = useState([]);
+        const [newSkillInput, setNewSkillInput] = useState('');
 
     useEffect(() => {
         const fetchProjectAndSkills = async () => {
@@ -73,21 +76,38 @@ const ProjectEditPage = () => {
         setSelectedSkills(selectedIds);
     };
 
+        // Handle new skill input
+        const handleNewSkillInputChange = (e) => {
+            setNewSkillInput(e.target.value);
+        };
+
+        const handleAddNewSkill = () => {
+            const trimmed = newSkillInput.trim();
+            if (trimmed && !newSkillNames.includes(trimmed)) {
+                setNewSkillNames([...newSkillNames, trimmed]);
+                setNewSkillInput('');
+            }
+        };
+
+        const handleRemoveNewSkill = (name) => {
+            setNewSkillNames(newSkillNames.filter(skill => skill !== name));
+        };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
         try {
-            await axiosInstance.put(`/projects/${projectId}/`, { // Use PUT or PATCH
-                title,
-                description,
-                budget,
-                duration: duration || null,
-                skill_ids: selectedSkills, // Send updated skill IDs
-                time_slot: timeSlot,
-                deadline: deadline || null,
-                 // Note: status and client shouldn't be updated here generally
-            });
+                await axiosInstance.put(`/projects/${projectId}/`, {
+                    title,
+                    description,
+                    budget,
+                    duration: duration || null,
+                    skill_ids: selectedSkills,
+                    new_skill_names: newSkillNames,
+                    time_slot: timeSlot,
+                    deadline: deadline || null,
+                });
             alert('Project updated successfully!');
             navigate(`/project/${projectId}`); // Navigate back to project detail
         } catch (error) {
@@ -113,14 +133,14 @@ const ProjectEditPage = () => {
 
 
     return (
-        <Container className="py-5">
+        <Container className="py-5" style={{ backgroundImage: 'url(/project-bg.jpg)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
             <Row className="justify-content-center">
                 <Col md={8}>
                     <h1>Edit Project: {project.title}</h1>
                     <Card className="p-4 shadow-sm">
-                        {error && !loading && <Alert variant="danger">{error}</Alert>} {/* Show error only when not loading */}
+                        {error && !loading && <Alert variant="danger">{error}</Alert>}
                         <Form onSubmit={handleSubmit}>
-                             <Form.Group className="mb-3"><Form.Label>Project Title</Form.Label><Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label>Project Title</Form.Label><Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required /></Form.Group>
                             <Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required /></Form.Group>
                             <Row>
                                 <Col md={6}><Form.Group className="mb-3"><Form.Label>Budget (₹)</Form.Label><Form.Control type="number" step="0.01" value={budget} onChange={e => setBudget(e.target.value)} required /></Form.Group></Col>
@@ -134,6 +154,21 @@ const ProjectEditPage = () => {
                                     ))}
                                 </Form.Control>
                                 <Form.Text muted>Hold Ctrl (or Cmd) to select multiple.</Form.Text>
+                                {/* New skill input */}
+                                <div className="mt-3">
+                                    <Form.Label>Add New Skills</Form.Label>
+                                    <InputGroup>
+                                        <Form.Control type="text" value={newSkillInput} onChange={handleNewSkillInputChange} placeholder="Type a skill and press Add" />
+                                        <Button variant="outline-primary" onClick={handleAddNewSkill}>Add</Button>
+                                    </InputGroup>
+                                    <div className="mt-2">
+                                        {newSkillNames.map((name, idx) => (
+                                            <Badge key={idx} bg="info" className="me-2">
+                                                {name} <Button variant="link" size="sm" className="p-0 ms-1" onClick={() => handleRemoveNewSkill(name)}>&times;</Button>
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
                             </Form.Group>
                             <Row>
                                 <Col md={6}>

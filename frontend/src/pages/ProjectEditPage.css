@@ -1,0 +1,53 @@
+.project-bg-overlay {
+    min-height: 100vh;
+    background: linear-gradient(rgba(30,30,60,0.7), rgba(30,30,60,0.7)), url('/project-bg.jpg') center/cover no-repeat fixed;
+    width: 100vw;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: -1;
+}
+
+.fade-slide-enter {
+    opacity: 0;
+    transform: translateY(40px);
+}
+.fade-slide-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 500ms, transform 500ms;
+}
+.fade-slide-exit {
+    opacity: 1;
+    transform: translateY(0);
+}
+.fade-slide-exit-active {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 500ms, transform 500ms;
+}
+
+.animate-card {
+    animation: fadeInCard 0.7s;
+}
+@keyframes fadeInCard {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.animate-badge {
+    animation: popBadge 0.4s;
+}
+@keyframes popBadge {
+    0% { transform: scale(0.7); opacity: 0.5; }
+    80% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-btn {
+    transition: box-shadow 0.3s, transform 0.3s;
+}
+.animate-btn:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    transform: translateY(-2px) scale(1.04);
+}

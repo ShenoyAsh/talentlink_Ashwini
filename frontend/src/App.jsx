@@ -9,6 +9,10 @@ import './App.css';
 import './index.css'; // Make sure index.css is imported if App.css doesn't cover everything
 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup, Image, Dropdown, Offcanvas } from 'react-bootstrap';
+import { CSSTransition } from 'react-transition-group';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import './pages/ProjectEditPage.css'; // Reuse animation/background styles
 import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon, Send, UserPlus, Star, Activity, BarChart3, Filter, TrendingUp, Bookmark, BookmarkCheck, Shield, Trophy, Zap, Wallet as WalletIcon } from 'lucide-react';
 
 // Import new/updated pages and components
@@ -989,6 +993,7 @@ const ProjectDetailPage = () => {
 const ProjectCreatePage = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [showForm, setShowForm] = useState(false);
     const [budget, setBudget] = useState('');
     const [duration, setDuration] = useState('');
     const [skills, setSkills] = useState([]); // Stores selected skill IDs
@@ -997,8 +1002,12 @@ const ProjectCreatePage = () => {
     const [deadline, setDeadline] = useState('');
     const [loading, setLoading] = useState(false); // Loading state
     const [error, setError] = useState(''); // Error state
+    // New state for typed skill names
+    const [newSkillNames, setNewSkillNames] = useState([]);
+    const [newSkillInput, setNewSkillInput] = useState('');
     const { axiosInstance } = useAuth();
     const navigate = useNavigate();
+
 
     useEffect(() => {
         const fetchSkills = async () => {
@@ -1011,30 +1020,30 @@ const ProjectCreatePage = () => {
             }
         };
         fetchSkills();
+        setTimeout(() => setShowForm(true), 100); // Animate form in
     }, [axiosInstance]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleCreateProject = async () => {
         setLoading(true);
-        setError('');
         try {
             await axiosInstance.post('/projects/', {
                 title,
                 description,
                 budget,
-                duration: duration || null, // Send null if empty
-                skill_ids: skills, // Send selected skill IDs
+                duration: duration || null,
+                skill_ids: skills,
+                new_skill_names: newSkillNames,
                 time_slot: timeSlot,
                 deadline: deadline || null,
             });
             alert('Project created successfully!');
-            navigate('/dashboard'); // Redirect after creation
+            navigate('/dashboard');
         } catch (error) {
             const errorData = error.response?.data;
-             let errorMsg = 'Failed to create project.';
-             if (errorData) {
-                 errorMsg += ` ${JSON.stringify(errorData)}`; // Basic error display
-             }
+            let errorMsg = 'Failed to create project.';
+            if (errorData) {
+                errorMsg += ` ${JSON.stringify(errorData)}`;
+            }
             console.error('Failed to create project:', errorData || error.message);
             setError(errorMsg);
         } finally {
@@ -1042,60 +1051,109 @@ const ProjectCreatePage = () => {
         }
     };
 
-    const handleSkillChange = (e) => {
-        // Convert selected options NodeList to an array of values (IDs)
-        const selectedSkills = Array.from(e.target.selectedOptions, option => parseInt(option.value, 10));
-        setSkills(selectedSkills);
-    }
-
     return (
-        <Container className="py-5">
+        <Container className="py-5 animate-fade-in" style={{ minHeight: '80vh' }}>
             <Row className="justify-content-center">
-                 <Col md={8}>
-                     <h1>Create a New Project</h1>
-                     <Card className="p-4 shadow-sm">
-                        {error && <Alert variant="danger">{error}</Alert>}
-                        <Form onSubmit={handleSubmit}>
-                            <Form.Group className="mb-3"><Form.Label>Project Title</Form.Label><Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required /></Form.Group>
-                            <Form.Group className="mb-3"><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required placeholder="Describe the project requirements, scope, and deliverables..." /></Form.Group>
-                            <Row>
-                                <Col md={6}><Form.Group className="mb-3"><Form.Label>Budget (₹)</Form.Label><Form.Control type="number" step="0.01" value={budget} onChange={e => setBudget(e.target.value)} required placeholder="e.g., 5000.00" /></Form.Group></Col>
-                                <Col md={6}><Form.Group className="mb-3"><Form.Label>Estimated Duration (days)</Form.Label><Form.Control type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="Optional: e.g., 30" /></Form.Group></Col>
-                            </Row>
-                            <Form.Group className="mb-3">
-                                <Form.Label>Skills Required (Select multiple)</Form.Label>
-                                <Form.Control as="select" multiple value={skills.map(String)} onChange={handleSkillChange} style={{ height: '150px' }}>
-                                    {availableSkills.map(skill => (
-                                        <option key={skill.id} value={skill.id}>{skill.name}</option>
-                                    ))}
-                                </Form.Control>
-                                 <Form.Text muted>Hold Ctrl (or Cmd on Mac) to select multiple skills.</Form.Text>
-                            </Form.Group>
-                            <Row>
-                                <Col md={6}>
-                                    <Form.Group className="mb-3">
-                                        <Form.Label>Preferred Time Slot (Optional)</Form.Label>
-                                        <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} placeholder="e.g., Weekdays 9am-5pm IST"/>
-                                    </Form.Group>
-                                </Col>
-                                <Col md={6}>
-                                    <Form.Group className="mb-3">
-                                        <Form.Label>Project Deadline (Optional)</Form.Label>
-                                        <Form.Control type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
-                                        <Form.Text muted>Set deadline for project completion</Form.Text>
-                                    </Form.Group>
-                                </Col>
-                            </Row>
-                            <Button type="submit" variant="primary" disabled={loading}>
-                                 {loading ? <Spinner as="span" size="sm" /> : <><PlusCircle size={16} className="me-1"/> Post Project</>}
-                            </Button>
-                        </Form>
-                     </Card>
+                <Col md={8} lg={7}>
+                    <Card className="shadow-lg border-0">
+                        <Card.Body>
+                            <h2 className="mb-4 text-center gradient-text">Post a New Project</h2>
+                            {error && <Alert variant="danger">{error}</Alert>}
+                            <Form onSubmit={e => { e.preventDefault(); handleCreateProject(); }}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Title *</Form.Label>
+                                    <Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="Project Title" />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Description *</Form.Label>
+                                    <Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required placeholder="Describe your project..." />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Budget (₹) *</Form.Label>
+                                    <Form.Control type="number" step="0.01" value={budget} onChange={e => setBudget(e.target.value)} required placeholder="e.g., 5000.00" />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Duration (days)</Form.Label>
+                                    <Form.Control type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="e.g., 30" />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Time Slot (Optional)</Form.Label>
+                                    <Form.Control type="text" value={timeSlot} onChange={e => setTimeSlot(e.target.value)} placeholder="e.g., Mon-Fri, 10am-6pm" />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Deadline (Optional)</Form.Label>
+                                    <Form.Control type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Skills Required</Form.Label>
+                                    <div className="d-flex flex-wrap gap-2 mb-2">
+                                        {availableSkills.map(skill => (
+                                            <Badge
+                                                key={skill.id}
+                                                pill
+                                                bg={skills.includes(skill.id) ? "primary" : "light"}
+                                                text={skills.includes(skill.id) ? "light" : "dark"}
+                                                style={{ cursor: "pointer", border: "1px solid #dee2e6" }}
+                                                onClick={() => setSkills(skills.includes(skill.id) ? skills.filter(id => id !== skill.id) : [...skills, skill.id])}
+                                            >
+                                                {skill.name}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <Form.Text className="text-muted">Click to select/unselect skills.</Form.Text>
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label>Type New Skills</Form.Label>
+                                    <InputGroup>
+                                        <Form.Control
+                                            type="text"
+                                            value={newSkillInput}
+                                            onChange={e => setNewSkillInput(e.target.value)}
+                                            placeholder="Type a skill and press Enter"
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && newSkillInput.trim()) {
+                                                    setNewSkillNames([...newSkillNames, newSkillInput.trim()]);
+                                                    setNewSkillInput('');
+                                                    e.preventDefault();
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant="outline-primary"
+                                            onClick={() => {
+                                                if (newSkillInput.trim()) {
+                                                    setNewSkillNames([...newSkillNames, newSkillInput.trim()]);
+                                                    setNewSkillInput('');
+                                                }
+                                            }}
+                                        >Add</Button>
+                                    </InputGroup>
+                                    <div className="mt-2">
+                                        {newSkillNames.map((skill, idx) => (
+                                            <Badge key={idx} pill bg="info" text="light" className="me-1 mb-1">
+                                                {skill}
+                                                <span
+                                                    style={{ cursor: 'pointer', marginLeft: 6 }}
+                                                    onClick={() => setNewSkillNames(newSkillNames.filter((_, i) => i !== idx))}
+                                                >
+                                                    &times;
+                                                </span>
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <Form.Text className="text-muted">You can add skills not listed above.</Form.Text>
+                                </Form.Group>
+                                <Button variant="primary" type="submit" className="w-100" disabled={loading}>
+                                    {loading ? <Spinner as="span" animation="border" size="sm" /> : 'Post Project'}
+                                </Button>
+                            </Form>
+                        </Card.Body>
+                    </Card>
                 </Col>
             </Row>
         </Container>
     );
-};
+}
 
 
 const DashboardPage = () => {
@@ -2187,5 +2245,4 @@ function App() {
         </AuthProvider>
     );
 }
-
 export default App;
