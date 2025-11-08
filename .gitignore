@@ -1,14 +1,17 @@
-    # Environment files
-    backend_env
-    backend/.env
-    
-    # Python/Django backend
-    /backend/venv/
-    __pycache__/
-    *.pyc
-    
-    # Node.js/React frontend
-    /frontend/node_modules/
-    /frontend/dist/
-    npm-debug.log
-    node_modules/
+# Environment files
+**backend-env/**
+backend/.env
+
+# Python/Django backend
+/backend/venv/
+__pycache__/
+*.pyc
+
+# Node.js/React frontend
+**node_modules/**
+/frontend/node_modules/
+/frontend/dist/
+npm-debug.log
+
+# This line was redundant, so I removed it:
+# *.node_modules/
