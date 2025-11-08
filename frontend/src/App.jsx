@@ -262,55 +262,79 @@ const NotificationBell = () => {
     const [loading, setLoading] = useState(false);
     const audioRef = useRef(null);
 
+    // --- FIX 2: Add this useEffect to "unlock" audio on first user interaction ---
+    useEffect(() => {
+        const unlockAudio = () => {
+            if (audioRef.current && audioRef.current.paused) {
+                // Play and immediately pause the audio
+                audioRef.current.play().catch(() => {}); // Play and ignore error if it fails
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0; // Rewind
+            }
+            // Remove the listeners after the first interaction
+            window.removeEventListener('click', unlockAudio);
+            window.removeEventListener('keydown', unlockAudio);
+        };
+
+        // Listen for the first click or keypress
+        window.addEventListener('click', unlockAudio);
+        window.addEventListener('keydown', unlockAudio);
+
+        return () => {
+            // Cleanup listeners
+            window.removeEventListener('click', unlockAudio);
+            window.removeEventListener('keydown', unlockAudio);
+        };
+    }, [audioRef]); // Run only once when the component mounts
+    // --- END OF FIX 2 ---
+
     const fetchNotifications = async () => {
         if (!user) return;
-        // Don't set loading true for background polls to avoid UI flicker
-        // setLoading(true);
         try {
-            // Fetch only unread count for the badge initially or during polls
             const response = await axiosInstance.get('/notifications/?read=false');
             const unread = response.data.results || response.data;
             const count = Array.isArray(unread) ? unread.length : (response.data.count !== undefined ? response.data.count : 0);
 
             // Play sound if new notifications arrived
             if (count > unreadCount && audioRef.current) {
-                audioRef.current.play();
+                // --- Also added error catching to the play() call ---
+                const playPromise = audioRef.current.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log("Audio play failed (user may need to interact first):", error);
+                    });
+                }
             }
-            // Only update state if the count actually changed
+            
             if (count !== unreadCount) {
                 setUnreadCount(count);
             }
         } catch (error) {
             console.error("Failed to fetch unread notifications count:", error);
-        } finally {
-            // setLoading(false);
         }
     };
 
     useEffect(() => {
         fetchNotifications(); // Initial fetch
-        // Set up polling
-        const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
-        return () => clearInterval(interval); // Cleanup on unmount
-    }, [user, axiosInstance]); // Rerun if user or axiosInstance changes
+        const interval = setInterval(fetchNotifications, 30000); 
+        return () => clearInterval(interval);
+    }, [user, axiosInstance]);
 
 
     const handleToggleOffcanvas = async () => {
         const currentlyShowing = showOffcanvas;
-        setShowOffcanvas(!currentlyShowing); // Toggle state immediately
+        setShowOffcanvas(!currentlyShowing); 
 
-        if (!currentlyShowing) { // If opening the offcanvas
-            setLoading(true); // Show spinner inside offcanvas
+        if (!currentlyShowing) { 
+            setLoading(true); 
             try {
-                // Fetch all notifications (read and unread) for the panel
                 const response = await axiosInstance.get('/notifications/');
                 const allNotifications = response.data.results || response.data;
                 setNotifications(allNotifications);
-                // Update unread count based on the full list fetched
                  setUnreadCount(allNotifications.filter(n => !n.read).length);
             } catch (error) {
                 console.error("Failed to fetch all notifications:", error);
-                setNotifications([]); // Clear notifications on error maybe?
+                setNotifications([]); 
             } finally {
                 setLoading(false);
             }
@@ -319,33 +343,32 @@ const NotificationBell = () => {
 
      const markAsRead = async (id) => {
          try {
-             await axiosInstance.patch(`/notifications/${id}/mark-read/`); // Corrected path
-             // Optimistically update UI
+             await axiosInstance.patch(`/notifications/${id}/mark_read/`); 
              setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-             setUnreadCount(prev => Math.max(0, prev - 1)); // Decrement unread count
+             setUnreadCount(prev => Math.max(0, prev - 1)); 
          } catch (error) {
              console.error("Failed to mark notification as read:", error);
-             alert("Could not mark notification as read."); // Inform user
+             alert("Could not mark notification as read."); 
          }
      };
 
      const markAllRead = async () => {
          try {
-             await axiosInstance.post(`/notifications/mark-all-read/`); // Corrected path
-             // Optimistically update UI
+             await axiosInstance.post(`/notifications/mark-all-read/`); 
              setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-             setUnreadCount(0); // Set count to 0
+             setUnreadCount(0); 
          } catch (error) {
              console.error("Failed to mark all as read:", error);
-              alert("Could not mark all notifications as read."); // Inform user
+              alert("Could not mark all notifications as read."); 
          }
      };
 
 
     return (
         <>
-            {/* Notification sound element (hidden) */}
-            <audio ref={audioRef} src="/notification.mp3" preload="auto" style={{ display: 'none' }} />
+            {/* --- FIX 1: Changed src from .mp3 to .wav --- */}
+            <audio ref={audioRef} src="/notification.wav" preload="auto" style={{ display: 'none' }} />
+            
             <Nav.Link onClick={handleToggleOffcanvas} className="position-relative">
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -361,9 +384,7 @@ const NotificationBell = () => {
                     <Offcanvas.Title>Notifications</Offcanvas.Title>
                 </Offcanvas.Header>
                 <Offcanvas.Body>
-
                      {notifications.some(n => !n.read) && <Button variant="outline-secondary" size="sm" className="mb-2 w-100" onClick={markAllRead}>Mark all as read</Button>}
-
                     {loading ? <div className="text-center"><Spinner animation="border" size="sm" /></div> :
                      notifications.length > 0 ? (
                         <ListGroup variant="flush">
@@ -380,7 +401,6 @@ const NotificationBell = () => {
                                     )}
                                 </ListGroup.Item>
                             ))}
-                             {/* Link to full page */}
                              <ListGroup.Item className="text-center mt-2 border-0">
                                 <Link to="/notifications" onClick={() => setShowOffcanvas(false)}>View All Notifications</Link>
                             </ListGroup.Item>
@@ -394,8 +414,6 @@ const NotificationBell = () => {
     );
 };
 
-
-// --- Main Layout ---
 // --- Main Layout ---
 const AppNavbar = () => {
     const { user, logout } = useAuth();
