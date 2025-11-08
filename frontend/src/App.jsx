@@ -1,21 +1,14 @@
-// frontend/src/App.jsx
 import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
-// Correct import if BrowserRouter is used here instead of main.jsx
-// import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
-// Use this import if BrowserRouter is in main.jsx (as is standard)
 import { Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
-import './index.css'; // Make sure index.css is imported if App.css doesn't cover everything
-
+import './index.css'; 
 import { Navbar, Nav, Container, Button, Form, Card, Row, Col, Alert, Spinner, Badge, ListGroup, Modal, InputGroup, Image, Dropdown, Offcanvas } from 'react-bootstrap';
-import { CSSTransition } from 'react-transition-group';
-import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import './pages/ProjectEditPage.css'; // Reuse animation/background styles
+import './pages/ProjectEditPage.css'; 
 import { Briefcase, LogOut, User, DollarSign, Clock, PlusCircle, Search, Check, X, MessageSquare, Award, FileText, Bell, Edit, Trash2, Link as LinkIconLucide, Image as ImageIcon, Send, UserPlus, Star, Activity, BarChart3, Filter, TrendingUp, Bookmark, BookmarkCheck, Shield, Trophy, Zap, Wallet as WalletIcon } from 'lucide-react';
 
-// Import new/updated pages and components
+
 import ProfilePage from './pages/ProfilePage';
 import ContractsPage from './pages/ContractsPage';
 import ReviewPage from './pages/ReviewPage';
@@ -27,69 +20,52 @@ import InvoicesPage from './pages/InvoicesPage';
 import HomePage from './components/HomePage';
 import './components/HomePage.css';
 
-// Use environment variable or default
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'; // Base URL (for media)
-const API_URL = `${API_BASE_URL}/api`; // API endpoint
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'; 
+const API_URL = `${API_BASE_URL}/api`; 
 
-
-// --- Axios Interceptor for Auth ---
 const axiosInstance = axios.create({
     baseURL: API_URL,
-    timeout: 5000, // Increased timeout slightly
+    timeout: 5000, 
     headers: {
-        // Default content type - will be overridden for FormData
         'Content-Type': 'application/json',
     }
 });
-
-// --- Authentication Context ---
 const AuthContext = createContext();
 
 const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(() => localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null);
     const [tokens, setTokens] = useState(() => localStorage.getItem('authTokens') ? JSON.parse(localStorage.getItem('authTokens')) : null);
-    const [loading, setLoading] = useState(false); // For login/register process
-    const [authLoading, setAuthLoading] = useState(true); // Initial auth check
+    const [loading, setLoading] = useState(false); 
+    const [authLoading, setAuthLoading] = useState(true); 
     const navigate = useNavigate();
-    const location = useLocation(); // Get current location
-
-    // Refresh token logic reference
+    const location = useLocation(); 
     const refreshIntervalRef = useRef();
 
-    // Axios Request Interceptor
     useEffect(() => {
         const reqInterceptor = axiosInstance.interceptors.request.use(config => {
             const currentTokens = localStorage.getItem('authTokens') ? JSON.parse(localStorage.getItem('authTokens')) : null;
             if (currentTokens?.access) {
                 config.headers.Authorization = `Bearer ${currentTokens.access}`;
             }
-            // Handle multipart form data for file uploads
             if (config.data instanceof FormData) {
-                // Let the browser set the Content-Type header with the boundary
                  delete config.headers['Content-Type'];
             } else {
-                 // Set JSON content type for other requests
                  config.headers['Content-Type'] = 'application/json';
             }
             return config;
         }, error => Promise.reject(error));
-
-        setAuthLoading(false); // Finished initial setup
-
+        setAuthLoading(false); 
         return () => {
             axiosInstance.interceptors.request.eject(reqInterceptor);
         };
     }, []);
 
-     // Axios Response Interceptor for Token Refresh
     useEffect(() => {
         const resInterceptor = axiosInstance.interceptors.response.use(
             response => response,
             async error => {
                 const originalRequest = error.config;
                 const currentTokens = localStorage.getItem('authTokens') ? JSON.parse(localStorage.getItem('authTokens')) : null;
-
-                // Check for 401 Unauthorized and if it's not a token refresh request itself
                 if (error.response?.status === 401 && currentTokens?.refresh && !originalRequest._retry) {
                     originalRequest._retry = true; // Mark to prevent infinite loops
                     try {
@@ -100,36 +76,29 @@ const AuthProvider = ({ children }) => {
                         const newTokens = { ...currentTokens, access: refreshResponse.data.access };
                         setTokens(newTokens);
                         localStorage.setItem('authTokens', JSON.stringify(newTokens));
-                        // Update default header for subsequent requests by THIS instance
                         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newTokens.access}`;
-                         // Update header for the original request before retrying
                         originalRequest.headers['Authorization'] = `Bearer ${newTokens.access}`;
                         console.log("Token refreshed successfully.");
-                        return axiosInstance(originalRequest); // Retry original request with new token
+                        return axiosInstance(originalRequest);
                     } catch (refreshError) {
                         console.error("Token refresh failed:", refreshError?.response?.data || refreshError?.message || refreshError);
-                        // Refresh failed, logout user
-                        logout(false); // Pass false to prevent navigation if already on login
+                        logout(false); 
                         return Promise.reject(refreshError);
                     }
                 }
-                // For other errors, just reject the promise
                 return Promise.reject(error);
             }
         );
 
         return () => {
-            // Clean up the interceptor when the component unmounts or tokens change
             axiosInstance.interceptors.response.eject(resInterceptor);
         };
-    }, [tokens]); // Re-run the effect if tokens change (to capture new refresh token if applicable)
+    }, [tokens]);
 
     const login = async (username, password) => {
         setLoading(true);
         try {
-            // Check if backend is accessible first
             console.log(`Attempting login to: ${API_URL}/token/`);
-            
             const tokenResponse = await axios.post(`${API_URL}/token/`, { username, password });
             const newTokens = tokenResponse.data;
             
@@ -139,31 +108,24 @@ const AuthProvider = ({ children }) => {
             
             setTokens(newTokens);
             localStorage.setItem('authTokens', JSON.stringify(newTokens));
-            // Apply token immediately for the subsequent profile request
             axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${newTokens.access}`;
-
              const profileResponse = await axiosInstance.get(`/profiles/`);
-
             const profileData = profileResponse.data.results || profileResponse.data;
             const userProfile = Array.isArray(profileData)
                 ? profileData.find(p => p.user === username)
                 : (profileData && profileData.user === username ? profileData : null);
-
-
             if (userProfile) {
-
                  const getFullImageUrl = (url) => {
                      if (!url) return null;
                      if (url.startsWith('http')) return url;
-                     return `${API_BASE_URL}${url}`; // Prepend base URL
+                     return `${API_BASE_URL}${url}`; 
                  };
                 const fullProfilePicUrl = getFullImageUrl(userProfile.profile_picture);
-
                 const userDetails = {
                     username: userProfile.user,
                     user_type: userProfile.user_type,
                     profileId: userProfile.id,
-                    profilePicture: fullProfilePicUrl // Store the full URL
+                    profilePicture: fullProfilePicUrl 
                  };
                 setUser(userDetails);
                 localStorage.setItem('user', JSON.stringify(userDetails));
@@ -194,33 +156,29 @@ const AuthProvider = ({ children }) => {
             }
             
             alert(`Login failed: ${errorMessage}`);
-            logout(false); // Clear any potentially bad state on login failure
+            logout(false); 
         } finally {
             setLoading(false);
         }
     };
 
-    // Modified logout to accept navigateAway flag
      const logout = (navigateAway = true) => {
          console.log("Logging out...");
          setUser(null);
          setTokens(null);
-         localStorage.clear(); // Clear everything related to auth
-         delete axiosInstance.defaults.headers.common['Authorization']; // Clear default auth header
+         localStorage.clear(); 
+         delete axiosInstance.defaults.headers.common['Authorization']; 
          if (navigateAway && location.pathname !== '/login') {
               console.log("Navigating to login page.");
              navigate('/login');
          } else {
              console.log("Staying on current page or already on login page.");
          }
-         clearInterval(refreshIntervalRef.current); // Clear any scheduled refresh
+         clearInterval(refreshIntervalRef.current); 
      };
-
-     // Function to update user context (e.g., after profile picture update)
       const updateUserContext = (updates) => {
           setUser(prevUser => {
               if (!prevUser) return null;
-               // Construct full URL for profilePicture if it's being updated
                let finalUpdates = { ...updates };
                if (updates.profilePicture) {
                    const getFullImageUrl = (url) => {
@@ -232,19 +190,16 @@ const AuthProvider = ({ children }) => {
                }
 
               const updatedUser = { ...prevUser, ...finalUpdates };
-              localStorage.setItem('user', JSON.stringify(updatedUser)); // Update local storage too
+              localStorage.setItem('user', JSON.stringify(updatedUser)); 
               return updatedUser;
           });
        };
 
 
     if (authLoading) {
-        return <div className="vh-100 d-flex justify-content-center align-items-center"><Spinner animation="border" /></div>; // Full page loader
+        return <div className="vh-100 d-flex justify-content-center align-items-center"><Spinner animation="border" /></div>; 
     }
-
-
     return (
-        // Pass updateUserContext down
         <AuthContext.Provider value={{ user, login, logout, loading, axiosInstance, tokens, updateUserContext }}>
             {children}
         </AuthContext.Provider>
@@ -261,32 +216,24 @@ const NotificationBell = () => {
     const [showOffcanvas, setShowOffcanvas] = useState(false);
     const [loading, setLoading] = useState(false);
     const audioRef = useRef(null);
-
-    // --- FIX 2: Add this useEffect to "unlock" audio on first user interaction ---
     useEffect(() => {
         const unlockAudio = () => {
             if (audioRef.current && audioRef.current.paused) {
-                // Play and immediately pause the audio
-                audioRef.current.play().catch(() => {}); // Play and ignore error if it fails
+                audioRef.current.play().catch(() => {}); 
                 audioRef.current.pause();
-                audioRef.current.currentTime = 0; // Rewind
+                audioRef.current.currentTime = 0; 
             }
-            // Remove the listeners after the first interaction
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('keydown', unlockAudio);
         };
-
-        // Listen for the first click or keypress
         window.addEventListener('click', unlockAudio);
         window.addEventListener('keydown', unlockAudio);
 
         return () => {
-            // Cleanup listeners
             window.removeEventListener('click', unlockAudio);
             window.removeEventListener('keydown', unlockAudio);
         };
-    }, [audioRef]); // Run only once when the component mounts
-    // --- END OF FIX 2 ---
+    }, [audioRef]); 
 
     const fetchNotifications = async () => {
         if (!user) return;
@@ -294,10 +241,7 @@ const NotificationBell = () => {
             const response = await axiosInstance.get('/notifications/?read=false');
             const unread = response.data.results || response.data;
             const count = Array.isArray(unread) ? unread.length : (response.data.count !== undefined ? response.data.count : 0);
-
-            // Play sound if new notifications arrived
             if (count > unreadCount && audioRef.current) {
-                // --- Also added error catching to the play() call ---
                 const playPromise = audioRef.current.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
@@ -313,9 +257,8 @@ const NotificationBell = () => {
             console.error("Failed to fetch unread notifications count:", error);
         }
     };
-
     useEffect(() => {
-        fetchNotifications(); // Initial fetch
+        fetchNotifications(); 
         const interval = setInterval(fetchNotifications, 30000); 
         return () => clearInterval(interval);
     }, [user, axiosInstance]);
@@ -366,9 +309,7 @@ const NotificationBell = () => {
 
     return (
         <>
-            {/* --- FIX 1: Changed src from .mp3 to .wav --- */}
             <audio ref={audioRef} src="/notification.wav" preload="auto" style={{ display: 'none' }} />
-            
             <Nav.Link onClick={handleToggleOffcanvas} className="position-relative">
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -418,18 +359,15 @@ const NotificationBell = () => {
 const AppNavbar = () => {
     const { user, logout } = useAuth();
 
-     // Function to construct full image URL
+     
      const getFullImageUrl = (url) => {
          if (!url) return null;
-         // Check if it's already an absolute URL (starts with http or https)
          if (/^https?:\/\//i.test(url)) {
              return url;
          }
-         // Check if it's a blob URL (for previews)
           if (url.startsWith('blob:')) {
              return url;
          }
-         // Otherwise, prepend the base URL
          return `${API_BASE_URL}${url}`;
      };
 
@@ -439,7 +377,6 @@ const AppNavbar = () => {
     return (
         <Navbar bg="white" expand="lg" className="shadow-sm sticky-top">
             <Container>
-                 {/* Updated Brand */}
                  <Navbar.Brand as={Link} to="/" className="fw-bold d-flex align-items-center">
                     <img src="/logo.png" alt="TalentLink Logo" style={{ height: '30px', marginRight: '10px' }} />
                     TalentLink
@@ -483,9 +420,6 @@ const AppNavbar = () => {
     );
 };
 
-// --- Page Components (Keep implementations as previously corrected) ---
-// HomePage is now imported from components/HomePage.jsx
-
 const LoginPage = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -515,8 +449,8 @@ const RegisterPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [userType, setUserType] = useState('freelancer');
-    const [loading, setLoading] = useState(false); // Added loading state
-    const [error, setError] = useState(''); // Added error state
+    const [loading, setLoading] = useState(false); 
+    const [error, setError] = useState(''); 
     const navigate = useNavigate();
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -529,7 +463,6 @@ const RegisterPage = () => {
         } catch (err) {
             let errorMsg = "Registration failed. ";
             if (err.response?.data) {
-                // Extract specific errors from Django REST Framework response
                  const errors = err.response.data;
                  errorMsg += Object.entries(errors)
                     .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(' ') : messages}`)
@@ -567,7 +500,7 @@ const RegisterPage = () => {
     );
 };
 
-// --- Proposal Submission Modal ---
+
 const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal, onProposalUpdate }) => {
     const [coverLetter, setCoverLetter] = useState('');
     const [proposedRate, setProposedRate] = useState('');
@@ -576,25 +509,23 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal, o
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { axiosInstance } = useAuth();
-
-    // Populate form if editing or clear if new/modal reopens
     useEffect(() => {
-        if (show) { // Only run when modal is shown
+        if (show) { 
             if (existingProposal) {
                 setCoverLetter(existingProposal.cover_letter || '');
                 setProposedRate(existingProposal.proposed_rate || '');
                 setTimeAvailable(existingProposal.time_available || '');
                 setAdditionalInfo(existingProposal.additional_info || '');
             } else {
-                 // Reset form for new proposal
+                
                 setCoverLetter('');
                 setProposedRate('');
                 setTimeAvailable('');
                 setAdditionalInfo('');
             }
-            setError(''); // Clear error when modal opens
+            setError(''); 
         }
-    }, [existingProposal, show]); // Re-run when modal shows or proposal changes
+    }, [existingProposal, show]); 
 
     const handleSubmit = async () => {
         if (!coverLetter || !proposedRate) {
@@ -605,32 +536,27 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal, o
         setError('');
         try {
             const payload = {
-                // project field is required by serializer for POST, maybe not for PUT/PATCH if URL includes ID
-                project: projectId, // Ensure projectId is passed for creation
+                project: projectId, 
                 cover_letter: coverLetter,
                 proposed_rate: proposedRate,
                 time_available: timeAvailable,
                 additional_info: additionalInfo,
             };
             if (existingProposal) {
-                // Update existing proposal (PATCH is often preferred over PUT)
                  await axiosInstance.patch(`/proposals/${existingProposal.id}/`, payload);
                  alert('Proposal updated successfully!');
             } else {
-                // Create new proposal
                  await axiosInstance.post('/proposals/', payload);
                  alert('Proposal submitted successfully!');
             }
-            if(onProposalUpdate) onProposalUpdate(); // Call callback to refresh parent data
-            handleClose(); // Close modal on success
+            if(onProposalUpdate) onProposalUpdate(); 
+            handleClose(); 
         } catch (error) {
             const errorData = error.response?.data;
-            // Handle different error structures from DRF
             let errorMsg = existingProposal ? 'Failed to update proposal.' : 'Failed to submit proposal.';
             if (typeof errorData === 'string') {
                 errorMsg = errorData;
             } else if (errorData) {
-                // Try to extract specific field errors or detail
                 const messages = Object.entries(errorData)
                     .map(([field, fieldErrors]) => `${field}: ${Array.isArray(fieldErrors) ? fieldErrors.join(' ') : fieldErrors}`)
                     .join('; ');
@@ -724,7 +650,6 @@ const ProjectListPage = () => {
         if (!user) return;
             try {
                 if (isSaved) {
-                    // Find the saved project
                     const savedProjectsRes = await axiosInstance.get('/saved-projects/');
                     const savedProjects = savedProjectsRes.data.results || savedProjectsRes.data;
                     const saved = savedProjects.find(sp => {
@@ -737,7 +662,7 @@ const ProjectListPage = () => {
                 } else {
                     await axiosInstance.post('/saved-projects/', { project_id: projectId });
                 }
-                fetchProjects(); // Refresh to update is_saved status
+                fetchProjects(); 
             } catch (err) {
                 alert('Failed to save/unsave project.');
                 console.error(err);
@@ -825,7 +750,7 @@ const ProjectDetailPage = () => {
     const { user, axiosInstance } = useAuth();
     const [showProposalModal, setShowProposalModal] = useState(false);
     const [error, setError] = useState('');
-    const navigate = useNavigate(); // For navigation after delete
+    const navigate = useNavigate(); 
 
     useEffect(() => {
         const fetchProject = async () => {
@@ -1642,43 +1567,37 @@ const MessagingPage = () => {
         } finally {
             if (isInitialLoad) setLoading(false);
         }
-    }, [user, axiosInstance, activeConversationUser]); // Dependency array
+    }, [user, axiosInstance, activeConversationUser]); 
 
-    // --- Initial Fetch and Polling Setup ---
     useEffect(() => {
-        fetchAndGroupMessages(true); // Initial fetch
-
-        // Clear existing interval before setting a new one
+        fetchAndGroupMessages(true); 
         if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
         }
 
-        // Setup polling
         pollingIntervalRef.current = setInterval(() => {
-            fetchAndGroupMessages(false); // Background fetch
-        }, 8000); // Poll every 8 seconds
+            fetchAndGroupMessages(false); 
+        }, 8000); 
 
-        // Cleanup interval on component unmount
         return () => {
             if (pollingIntervalRef.current) {
                 clearInterval(pollingIntervalRef.current);
             }
         };
-    }, [fetchAndGroupMessages]); // Rerun effect if fetch function changes
+    }, [fetchAndGroupMessages]); 
 
-    // --- Scroll Effect ---
+  
     useEffect(() => {
-        if (activeConversationUser) { // Only scroll when a chat is active
+        if (activeConversationUser) { 
             scrollToBottom();
         }
-    }, [activeConversationUser, conversations, scrollToBottom]); // Trigger scroll on chat switch or new messages
+    }, [activeConversationUser, conversations, scrollToBottom]); 
 
-    // --- Event Handlers ---
     const handleSelectConversation = (username) => {
         setActiveConversationUser(username);
-        setSendError(''); // Clear errors when switching
+        setSendError('');
         setNewChatError('');
-        setNewMessage(''); // Clear input field
+        setNewMessage(''); 
     };
 
     const handleSendMessage = async (e) => {
@@ -1689,40 +1608,34 @@ const MessagingPage = () => {
         setSendError('');
 
         try {
-            // POST to the /messages/ endpoint
             const response = await axiosInstance.post('/messages/', {
-                receiver_username: activeConversationUser, // Backend expects this field
+                receiver_username: activeConversationUser, 
                 content: newMessage.trim(),
             });
             const sentMessage = response.data;
-
-            // Update state: Add the new message to the correct conversation group
             setConversations(prev => {
                 const updatedConversations = { ...prev };
-                const partner = activeConversationUser; // Use the active user
+                const partner = activeConversationUser; 
 
                 if (!updatedConversations[partner]) {
                     updatedConversations[partner] = [];
                 }
 
-                // Add message if not already added by polling
                 if (!updatedConversations[partner].some(msg => msg.id === sentMessage.id)) {
                     updatedConversations[partner] = [...updatedConversations[partner], sentMessage];
-                     // Ensure sorting after adding
                      updatedConversations[partner].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 }
 
                 return updatedConversations;
             });
 
-            setNewMessage(''); // Clear input field
-            scrollToBottom(); // Scroll after successful send (or optimistic update)
+            setNewMessage(''); 
+            scrollToBottom(); 
 
         } catch (err) {
             const errorData = err.response?.data;
             let detailedError = "Failed to send message.";
             if (errorData) {
-                // Extract specific field errors or general detail from backend response
                 if (errorData.receiver_username) detailedError = `Receiver Error: ${errorData.receiver_username.join(', ')}`;
                 else if (errorData.content) detailedError = `Message Error: ${errorData.content.join(', ')}`;
                 else if (errorData.detail) detailedError = errorData.detail;
@@ -1750,48 +1663,38 @@ const MessagingPage = () => {
              return;
          }
 
-         // Activate the conversation locally - it will appear empty until a message is sent/received.
-         // Or, if it already exists from fetched messages, just switch to it.
          if (!conversations[targetUser]) {
-              setConversations(prev => ({ ...prev, [targetUser]: [] })); // Add empty array
+              setConversations(prev => ({ ...prev, [targetUser]: [] })); 
          }
          setActiveConversationUser(targetUser);
-         setNewChatUser(''); // Clear input
+         setNewChatUser('');
      };
 
-
-    // --- Render Logic ---
     if (loading) {
         return <Container className="text-center py-5"><Spinner animation="border" role="status"><span className="visually-hidden">Loading messages...</span></Spinner></Container>;
     }
-
-    // Sort partners for display based on the timestamp of the last message
     const conversationPartners = Object.entries(conversations)
         .sort(([, msgsA], [, msgsB]) => {
             const lastMsgTimeA = msgsA.length ? new Date(msgsA[msgsA.length - 1].timestamp).getTime() : 0;
             const lastMsgTimeB = msgsB.length ? new Date(msgsB[msgsB.length - 1].timestamp).getTime() : 0;
-            return lastMsgTimeB - lastMsgTimeA; // Most recent first
+            return lastMsgTimeB - lastMsgTimeA; 
         })
         .map(([username]) => username);
-
-    // Get messages for the currently active conversation
     const activeMessages = activeConversationUser ? conversations[activeConversationUser] || [] : [];
 
 
     return (
-        // Use Container fluid for full width, adjust main App layout if needed
         <Container fluid className="py-3 vh-100 d-flex flex-column">
             <h1 className="mb-3 h4"><MessageSquare size={20} className="me-2"/>Messages</h1>
 
             {fetchError && !loading && <Alert variant="warning" className="mb-2">{fetchError}</Alert>}
 
-            <Row className="flex-grow-1" style={{ minHeight: 0 }}> {/* Ensure row fills space */}
+            <Row className="flex-grow-1" style={{ minHeight: 0 }}>
 
-                {/* Sidebar */}
                 <Col md={4} lg={3} className="d-flex flex-column mb-3 mb-md-0 h-100">
                     <Card className="flex-grow-1 d-flex flex-column shadow-sm">
                         <Card.Header className="fw-bold">Conversations</Card.Header>
-                        {/* Input for new chat */}
+                       
                         <Card.Body className="p-2 border-bottom">
                             <InputGroup size="sm">
                                 <Form.Control
@@ -1805,7 +1708,7 @@ const MessagingPage = () => {
                             </InputGroup>
                             {newChatError && <small className="text-danger d-block mt-1 px-1">{newChatError}</small>}
                         </Card.Body>
-                        {/* Conversation List */}
+                       
                         <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto' }}>
                             {conversationPartners.length > 0 ? (
                                 conversationPartners.map(partner => (
@@ -1817,7 +1720,6 @@ const MessagingPage = () => {
                                         className="d-flex justify-content-between align-items-center text-break" // Allow long usernames to wrap
                                     >
                                          <span>{partner}</span>
-                                        {/* Optional: Add timestamp or unread indicator here */}
                                         {conversations[partner]?.length > 0 &&
                                             <small className="text-muted ms-2 text-nowrap">
                                                 {new Date(conversations[partner][conversations[partner].length - 1].timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
@@ -1832,7 +1734,6 @@ const MessagingPage = () => {
                     </Card>
                 </Col>
 
-                {/* Main Chat Area */}
                 <Col md={8} lg={9} className="d-flex flex-column h-100">
                     <Card className="flex-grow-1 d-flex flex-column shadow-sm">
                         <Card.Header>
@@ -1842,8 +1743,6 @@ const MessagingPage = () => {
                                 'Select or start a conversation'
                             )}
                         </Card.Header>
-
-                        {/* Message Display Area */}
                         <Card.Body className="d-flex flex-column" style={{ overflowY: 'auto', flexGrow: 1 }}>
                             {!activeConversationUser ? (
                                 <p className="text-muted text-center m-auto">Select a conversation from the list or start a new one.</p>
@@ -1853,7 +1752,7 @@ const MessagingPage = () => {
                                 <>
                                     {activeMessages.map((message, index) => (
                                         <div
-                                            key={message.id || `msg-${index}`} // Use index as fallback if id is missing temporarily
+                                            key={message.id || `msg-${index}`} 
                                             className={`mb-2 d-flex ${message.sender === user.username ? 'justify-content-end' : 'justify-content-start'}`}
                                         >
                                             <div
@@ -1867,13 +1766,11 @@ const MessagingPage = () => {
                                             </div>
                                         </div>
                                     ))}
-                                    {/* Scroll target */}
                                     <div ref={messagesEndRef} style={{ height: '1px' }} />
                                 </>
                             )}
                         </Card.Body>
 
-                        {/* Input Footer (only if conversation is active) */}
                         {activeConversationUser && (
                             <Card.Footer className="bg-light p-2 border-top">
                                 {sendError && <Alert variant="danger" className="mb-2 py-1 px-2 small" onClose={() => setSendError('')} dismissible>{sendError}</Alert>}
@@ -1881,18 +1778,18 @@ const MessagingPage = () => {
                                     <InputGroup>
                                         <Form.Control
                                             as="textarea"
-                                            rows={1} // Start with 1 row, might auto-expand slightly
+                                            rows={1}
                                             placeholder="Type your message..."
                                             value={newMessage}
                                             onChange={(e) => setNewMessage(e.target.value)}
                                             required
                                             disabled={isSending}
-                                            style={{ resize: 'none', overflowY: 'auto', minHeight: '40px' }} // Min height
+                                            style={{ resize: 'none', overflowY: 'auto', minHeight: '40px' }} 
                                              onKeyDown={(e) => {
                                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                                     e.preventDefault(); // Prevent newline
+                                                     e.preventDefault(); 
                                                      if (!isSending && newMessage.trim()) {
-                                                         handleSendMessage(); // Call send handler
+                                                         handleSendMessage();
                                                      }
                                                  }
                                              }}
@@ -1911,7 +1808,7 @@ const MessagingPage = () => {
     );
 };
 
-// --- NEW FEATURE 1: Saved Projects Page ---
+// --- FEATURE 1: Saved Projects Page ---
 const SavedProjectsPage = () => {
     const { user, axiosInstance } = useAuth();
     const [savedProjects, setSavedProjects] = useState([]);
@@ -1988,7 +1885,7 @@ const SavedProjectsPage = () => {
     );
 };
 
-// --- NEW FEATURE 2: Activity Feed Page ---
+// --- FEATURE 2: Activity Feed Page ---
 const ActivityFeedPage = () => {
     const { user, axiosInstance } = useAuth();
     const [activities, setActivities] = useState([]);
@@ -2010,7 +1907,7 @@ const ActivityFeedPage = () => {
             }
         };
         fetchActivities();
-        const interval = setInterval(fetchActivities, 30000); // Refresh every 30s
+        const interval = setInterval(fetchActivities, 30000); 
         return () => clearInterval(interval);
     }, [user, axiosInstance]);
 
@@ -2060,7 +1957,7 @@ const ActivityFeedPage = () => {
     );
 };
 
-// --- NEW FEATURE 3: Analytics Dashboard Page ---
+// --- FEATURE : Analytics Dashboard Page ---
 const AnalyticsPage = () => {
     const { user, axiosInstance } = useAuth();
     const [analytics, setAnalytics] = useState([]);
@@ -2123,51 +2020,38 @@ const AnalyticsPage = () => {
                                                 <h4 className="text-warning">{anal.saved_count}</h4>
                                                 <small className="text-muted">Saved Count</small>
                                             </div>
-                                        </Col>
-                                    </Row>
-                                </Card.Body>
-                            </Card>
-                        </Col>
-                    ))}
-                </Row>
-            ) : (
+                                        </Col> </Row>  </Card.Body></Card>
+                        </Col> ))}
+                </Row> ) : (
                 <Alert variant="info">No analytics data available yet.</Alert>
             )}
         </Container>
-    );
-};
+    );};
 
-// --- NEW FEATURE 4: Advanced Filters Component (used in ProjectListPage) ---
-// --- NEW FEATURE 4: Advanced Filters Component (used in ProjectListPage) ---
+// --- Feature : Advanced Filters Component (used in ProjectListPage) ---
 const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
-    
-    // 1. Define the default (cleared) state for the filters
     const defaultFilters = {
         minBudget: '',
         maxBudget: '',
-        status: 'active', // Default to the 'active' status we fixed
+        status: 'active',
         sortBy: 'created_at'
     };
 
     // 2. The component now manages its own state
     const [filters, setFilters] = useState(defaultFilters);
-
-    // 3. When any filter changes, update the internal state AND tell the parent
     const handleFilterChange = (key, value) => {
         const newFilters = { ...filters, [key]: value };
         setFilters(newFilters);
-        onFilterChange(newFilters); // This triggers the project list to re-fetch
+        onFilterChange(newFilters); 
     };
 
-    // 4. NEW: This function resets the state and tells the parent
     const handleClear = () => {
-        setFilters(defaultFilters);      // Resets the values in this component
-        onFilterChange(defaultFilters); // Resets the filters in the parent page
+        setFilters(defaultFilters);    
+        onFilterChange(defaultFilters); 
     };
 
     return (
         <Card className="filter-panel animate-slide-in">
-            {/* 5. NEW: Added "Clear Filters" button to the header */}
             <Card.Header className="d-flex justify-content-between align-items-center">
                 <span>
                     <Filter className="me-2" /> Advanced Filters
@@ -2181,7 +2065,6 @@ const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
                     <Col md={6}>
                         <Form.Group className="mb-3">
                             <Form.Label>Min Budget (₹)</Form.Label>
-                            {/* 6. Forms are now correctly linked to the 'filters' state */}
                             <Form.Control type="number" value={filters.minBudget} onChange={e => handleFilterChange('minBudget', e.target.value)} placeholder="0" />
                         </Form.Group>
                     </Col>
@@ -2195,7 +2078,7 @@ const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
                         <Form.Group className="mb-3">
                             <Form.Label>Status</Form.Label>
                             <Form.Select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}>
-                                <option value="active">Active</option> {/* This line is now correct */}
+                                <option value="active">Active</option>
                                 <option value="in_progress">In Progress</option>
                                 <option value="completed">Completed</option>
                             </Form.Select>
@@ -2218,13 +2101,12 @@ const AdvancedFilters = ({ onFilterChange, availableSkills }) => {
     );
 };
 
-// --- NEW FEATURE 5: Badge Display Component ---
+// --- Feature:Badge Display Component ---
 export const BadgeDisplay = ({ userId }) => {
     const { axiosInstance } = useAuth();
     const [badges, setBadges] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    // --- MOVE getBadgeIcon INSIDE ---
     const getBadgeIcon = (badgeType) => {
         switch (badgeType) {
             case 'verified': return <Shield size={16} />;
@@ -2233,13 +2115,11 @@ export const BadgeDisplay = ({ userId }) => {
             default: return <Award size={16} />;
         }
     };
-    // --- END MOVE ---
 
     useEffect(() => {
         const fetchBadges = async () => {
             setLoading(true);
             try {
-                // Use the user ID from props if provided, otherwise fetch for the logged-in user
                 const url = userId ? `/badges/?user_id=${userId}` : '/badges/';
                 const response = await axiosInstance.get(url);
                 setBadges(response.data.results || response.data);
@@ -2250,7 +2130,7 @@ export const BadgeDisplay = ({ userId }) => {
             }
         };
         fetchBadges();
-    }, [userId, axiosInstance]); // Re-fetch if userId changes
+    }, [userId, axiosInstance]);
 
     if (loading) return <Spinner size="sm" />;
     if (badges.length === 0) return null;
@@ -2270,19 +2150,14 @@ export const BadgeDisplay = ({ userId }) => {
 // --- Main App Component ---
 function App() {
     return (
-        // AuthProvider now wraps everything, providing context
         <AuthProvider>
-             {/* Removed max-width and padding from here, relies on CSS file now */}
             <div className="d-flex flex-column" style={{ minHeight: "100vh" }}>
                 <AppNavbar />
-                <main className="flex-grow-1"> {/* main content should grow */}
+                <main className="flex-grow-1"> 
                     <Routes>
-                        {/* Public Routes */}
                         <Route path="/" element={<HomePage />} />
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
-
-                        {/* Protected/Semi-Protected Routes */}
                         <Route path="/notifications" element={<NotificationsPage />} />
                         <Route path="/dashboard" element={<DashboardPage />} />
                         <Route path="/profile" element={<ProfilePage />} />
@@ -2299,9 +2174,6 @@ function App() {
                         <Route path="/wallet" element={<WalletPage />} />
                         <Route path="/project/:id/milestones" element={<MilestonesPage />} />
                         <Route path="/invoices" element={<InvoicesPage />} />
-                        {/* <Route path="/proposal/:id/edit" element={<ProposalEditPage />} /> */}
-
-                        {/* 404 Not Found Route */}
                         <Route path="*" element={
                             <Container className="py-5 text-center">
                                 <h2>404 Not Found</h2>
@@ -2311,7 +2183,6 @@ function App() {
                         } />
                     </Routes>
                 </main>
-                {/* Optional Footer */}
                 <footer className="bg-light text-center text-muted py-3 mt-auto border-top">
                     <Container>
                         &copy; {new Date().getFullYear()} TalentLink. All rights reserved.
