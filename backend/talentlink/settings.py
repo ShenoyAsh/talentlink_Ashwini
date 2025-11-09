@@ -96,7 +96,7 @@ elif DEBUG:
         "http://127.0.0.1:3000",
     ]
     # Allow credentials for development
-    CORS_ALLOW_CREDENTIALS = True
+    
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:5173", 
@@ -104,7 +104,7 @@ else:
         "http://localhost:5174",
         "http://127.0.0.1:5174",
     ]
-
+CORS_ALLOW_CREDENTIALS = True
 # --- (Optional but recommended) For production SSL ---
 # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False') == 'True'
