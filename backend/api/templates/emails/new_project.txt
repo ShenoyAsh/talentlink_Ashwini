@@ -1,0 +1,13 @@
+Hi {{ freelancer_name }},
+
+A new project has been posted: {{ project_title }}
+
+Client: {{ client_name }}
+Budget: ${{ project_budget }}
+
+Description:
+{{ project_description|truncatewords:50 }}
+
+View the project here: {{ site_url }}/
+
+We hope you find your next opportunity!

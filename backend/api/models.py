@@ -306,6 +306,50 @@ def create_message_notification(sender, instance, created, **kwargs):
             message_text=message_text, # Use the rendered plain text
             message_html=message_html  # Use the rendered HTML
         )
+        
+
+@receiver(post_save, sender=Project)
+def create_project_notification(sender, instance, created, **kwargs):
+    if created:
+        # This is a new project.
+        project = instance
+        
+        # 1. Find all users who are freelancers
+        freelancer_profiles = Profile.objects.filter(user_type='freelancer')
+        all_freelancers = User.objects.filter(profile__in=freelancer_profiles)
+
+        subject = f"New Project Posted: {project.title}"
+        site_url = 'http://localhost:5173' # Or your production frontend URL
+
+        # 2. Loop through all freelancers and send them an email
+        for freelancer in all_freelancers:
+            if not freelancer.email:
+                continue # Skip users without an email
+
+            context = {
+                'freelancer_name': freelancer.username,
+                'project_title': project.title,
+                'project_description': project.description,
+                'project_budget': project.budget,
+                'client_name': project.client.username,
+                'site_url': site_url
+            }
+
+            try:
+                # 3. Render the templates you just created
+                message_text = render_to_string('emails/new_project.txt', context)
+                message_html = render_to_string('emails/new_project.html', context)
+
+                # 4. Send the email
+                send_notification_email(
+                    recipient_email=freelancer.email,
+                    subject=subject,
+                    message_text=message_text,
+                    message_html=message_html
+                )
+            except Exception as e:
+                # Log an error if sending fails
+                print(f"Error sending new project notification to {freelancer.email}: {e}")
 
 
 # --- New Models for Additional Features ---

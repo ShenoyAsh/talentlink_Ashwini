@@ -1,0 +1,16 @@
+{% extends 'emails/notification_base.html' %}
+
+{% block content %}
+  <p>Hi {{ freelancer_name }},</p>
+  <p>A new project has been posted that might match your skills!</p>
+  
+  <p><strong>Project:</strong> {{ project_title }}</p>
+  <p><strong>Client:</strong> {{ client_name }}</p>
+  <p><strong>Budget:</strong> ₹{{ project_budget }}</p>
+
+  <p><strong>Description:</strong><br/>
+  {{ project_description|truncatewords:50 }}</p>
+
+  <a href="{{ site_url }}/" class="button">View Project</a>
+  <p>Good luck!</p>
+{% endblock %}

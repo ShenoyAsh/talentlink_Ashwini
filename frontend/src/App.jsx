@@ -1026,7 +1026,7 @@ const ProjectCreatePage = () => {
                                     <Form.Control as="textarea" rows={5} value={description} onChange={e => setDescription(e.target.value)} required placeholder="Describe your project..." />
                                 </Form.Group>
                                 <Form.Group className="mb-3">
-                                    <Form.Label>Budget (9) *</Form.Label>
+                                    <Form.Label>Budget(₹) *</Form.Label>
                                     <Form.Control type="number" step="0.01" value={budget} onChange={e => setBudget(e.target.value)} required placeholder="e.g., 5000.00" />
                                 </Form.Group>
                                 <Form.Group className="mb-3">
