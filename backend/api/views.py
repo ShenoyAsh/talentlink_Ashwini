@@ -297,19 +297,28 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'], url_path='rate', permission_classes=[permissions.IsAuthenticated])
     def rate(self, request, pk=None):
-        """Allow the client to rate a proposal (1-5)."""
         proposal = get_object_or_404(Proposal.objects.select_related('project', 'freelancer'), pk=pk)
+        
         # Only the client who owns the project can rate
         if proposal.project.client != request.user:
             raise PermissionDenied("Only the project owner can rate this proposal.")
-        rating = request.data.get('rating')
-        try:
-            rating = int(rating)
-        except (TypeError, ValueError):
-            return Response({'detail': 'Rating must be an integer between 1 and 5.'}, status=status.HTTP_400_BAD_REQUEST)
-        if rating < 1 or rating > 5:
-            return Response({'detail': 'Rating must be between 1 and 5.'}, status=status.HTTP_400_BAD_REQUEST)
-        proposal.rating = rating
+            
+        rating = request.data.get('rating') # This can be 1, 2, 3, 4, 5, null, or ''
+
+        # Case 1: Rating is being cleared (set to null)
+        if rating is None or rating == '':
+            proposal.rating = None
+        # Case 2: Rating is being set to a value
+        else:
+            try:
+                rating_int = int(rating)
+                if not 1 <= rating_int <= 5:
+                    raise ValueError() # Trigger the except block
+                proposal.rating = rating_int
+            except (TypeError, ValueError):
+                # This catches non-integer values or values outside the 1-5 range
+                return Response({'detail': 'Rating must be an integer between 1 and 5.'}, status=status.HTTP_400_BAD_REQUEST)
+        
         proposal.save(update_fields=['rating'])
         serializer = self.get_serializer(proposal)
         return Response(serializer.data)
@@ -319,12 +328,10 @@ class ProposalViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             # Only freelancers can create proposals
             self.permission_classes = [permissions.IsAuthenticated, IsFreelancer]
-        elif self.action == 'update_status': # Custom action for client acceptance/rejection
-            # Permission check is inside the action itself (must be project client)
+        elif self.action in ['update_status', 'rate']: 
+            # Permission logic is handled *inside* the action methods
             self.permission_classes = [permissions.IsAuthenticated]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            # Freelancer can only modify/delete their *pending* proposals
-            # IsOwnerOrReadOnly checks freelancer owner AND proposal status='pending'
             self.permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
         elif self.action in ['list', 'retrieve']:
             # Visibility controlled by get_queryset

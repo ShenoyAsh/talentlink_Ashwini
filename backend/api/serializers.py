@@ -206,17 +206,24 @@ class ProposalSerializer(serializers.ModelSerializer):
     freelancer = serializers.StringRelatedField(read_only=True)
     project_title = serializers.CharField(source='project.title', read_only=True)
     # Allows associating with a project by its ID during creation
+    project_client = serializers.CharField(source='project.client.username', read_only=True)
+    # ---
+    # Allows associating with a project by its ID during creation
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.filter(status='active')) # Only allow proposing on active projects
     rating = serializers.IntegerField(required=False, min_value=1, max_value=5, allow_null=True)
 
     class Meta:
         model = Proposal
         fields = (
-            'id', 'project', 'project_title', 'freelancer', 'cover_letter',
+            'id', 'project', 'project_title', 
+            'project_client', # --- ADD THIS ---
+            'freelancer', 'cover_letter',
             'proposed_rate', 'status', 'submitted_at', 'time_available', 'additional_info', 'rating'
         )
         # Fields determined by the system or read-only context
-        read_only_fields = ('id', 'freelancer', 'project_title', 'submitted_at', 'status')
+        read_only_fields = ('id', 'freelancer', 'project_title', 
+                            'project_client', # --- AND ADD THIS ---
+                            'submitted_at', 'status')
 
     def validate_rating(self, value):
         if value is not None and (value < 1 or value > 5):
