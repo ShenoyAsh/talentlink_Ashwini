@@ -199,46 +199,79 @@ def capture_proposal_original_status(sender, instance, **kwargs):
 def create_proposal_status_notification(sender, instance, created, **kwargs):
     recipient = None
     subject = ""
-    message = ""
+    in_app_message = ""  # Simple message for in-app notification
     send_email_flag = False
+    context = {}  # Context for email templates
+    
+    # Get frontend URL (replace with your production URL or settings variable)
+    site_url = 'http://localhost:5173' 
 
-    # Check if the status has changed from its original state before saving
+    project_title = instance.project.title
+    freelancer_name = instance.freelancer.username
+    client_name = instance.project.client.username
+
+    # 1. Handle STATUS CHANGE (Accepted/Rejected) - Notify Freelancer
     if not created and instance.status != instance._original_status:
         recipient = instance.freelancer
-        project_title = instance.project.title
+        status_display = instance.status  # "accepted" or "rejected"
+        
         if instance.status == 'accepted':
             subject = f"Proposal Accepted: {project_title}"
-            message = f"Congratulations! Your proposal for the project '{project_title}' has been accepted."
-            send_email_flag = True
+            in_app_message = f"Congratulations! Your proposal for '{project_title}' has been accepted."
         elif instance.status == 'rejected':
             subject = f"Proposal Update: {project_title}"
-            message = f"Regarding your proposal for '{project_title}', the client has chosen another direction. Thank you for your interest."
-            send_email_flag = True
+            in_app_message = f"Regarding your proposal for '{project_title}', the client has chosen another direction."
+        
+        context = {
+            'recipient_name': recipient.username,    # For HTML template
+            'freelancer_name': recipient.username, # For TXT template
+            'client_name': client_name,
+            'project_title': project_title,
+            'status': status_display,
+            'site_url': site_url
+        }
+        send_email_flag = True
 
-    # Notify the client when a *new* proposal is submitted
+    # 2. Handle NEW SUBMISSION - Notify Client
     elif created:
-         recipient = instance.project.client
-         project_title = instance.project.title
-         freelancer_name = instance.freelancer.username
-         subject = f"New Proposal Received: {project_title}"
-         message = f"You have received a new proposal from {freelancer_name} for your project '{project_title}'. Please review it in your dashboard."
-         send_email_flag = True
+        recipient = instance.project.client
+        subject = f"New Proposal Received: {project_title}"
+        in_app_message = f"You have received a new proposal from {freelancer_name} for '{project_title}'."
+        
+        context = {
+            'recipient_name': recipient.username, # For HTML template
+            'freelancer_name': freelancer_name,
+            'client_name': recipient.username,
+            'project_title': project_title,
+            'status': 'new_submission', # Special key for the HTML template logic
+            'site_url': site_url
+        }
+        send_email_flag = True
 
+    # 3. Send Notifications
     if send_email_flag and recipient:
-        # Create the in-app notification (existing logic)
+        # Create the in-app notification
         Notification.objects.create(
             recipient=recipient,
-            message=message,
+            message=in_app_message,  # Use the simple message here
             project=instance.project,
             proposal=instance
         )
-        # Also send the email notification
-        send_notification_email(
-            recipient_email=recipient.email,
-            subject=subject,
-            message_text=message # Use the same message for plain text email
-            # message_html=render_to_string('emails/notification_template.html', {'message': message}) # Optional: use a template
-        )
+        
+        # Render and send the email notification
+        try:
+            message_text = render_to_string('emails/proposal_status.txt', context)
+            message_html = render_to_string('emails/proposal_status.html', context)
+            
+            send_notification_email(
+                recipient_email=recipient.email,
+                subject=subject,
+                message_text=message_text,
+                message_html=message_html
+            )
+        except Exception as e:
+            # Log this error if templates are missing or context is wrong
+            print(f"ERROR: Could not render or send proposal email. {e}")
 
 
 @receiver(post_save, sender=Message)
@@ -247,20 +280,31 @@ def create_message_notification(sender, instance, created, **kwargs):
         recipient = instance.receiver
         sender_name = instance.sender.username
         subject = f"New Message from {sender_name}"
-        message = f"You have received a new message from {sender_name}. Check your messages."
 
-        # Create the in-app notification (existing logic)
+        # 1. Create context for the email templates
+        context = {
+            'user_name': recipient.username, # The template expects 'user_name'
+            'sender_name': sender_name,
+            'site_url': 'http://localhost:5173' # Or your production frontend URL
+        }
+
+        # 2. Render both text and HTML versions
+        message_text = render_to_string('emails/new_message.txt', context)
+        message_html = render_to_string('emails/new_message.html', context)
+
+        # 3. Create the in-app notification (uses a simple message)
         Notification.objects.create(
             recipient=recipient,
-            message=message,
+            message=f"You have received a new message from {sender_name}. Check your messages.",
             related_message=instance # Link the notification to the message
         )
-        # Also send the email notification
+        
+        # 4. Send the email notification using both templates
         send_notification_email(
             recipient_email=recipient.email,
             subject=subject,
-            message_text=message
-            # message_html=render_to_string(...) # Optional HTML version
+            message_text=message_text, # Use the rendered plain text
+            message_html=message_html  # Use the rendered HTML
         )
 
 

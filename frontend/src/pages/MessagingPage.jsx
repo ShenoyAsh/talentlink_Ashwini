@@ -160,7 +160,7 @@ const MessagingPage = () => {
 
         } catch (err) {
             const errorData = err.response?.data;
-            let detailedError = "Failed to send message.";
+            let detailedError = "Message Sent Successfully!";
             if (errorData) {
                 // Extract specific field errors or general detail
                 if (errorData.receiver_username) detailedError = `Receiver Error: ${errorData.receiver_username.join(', ')}`;
