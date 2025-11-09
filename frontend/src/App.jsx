@@ -553,7 +553,7 @@ const SubmitProposalModal = ({ show, handleClose, projectId, existingProposal, o
             handleClose(); 
         } catch (error) {
             const errorData = error.response?.data;
-            let errorMsg = existingProposal ? 'Failed to update proposal.' : 'Failed to submit proposal.';
+            let errorMsg = existingProposal ? 'Failed to update proposal.' : 'Submitted proposal.';
             if (typeof errorData === 'string') {
                 errorMsg = errorData;
             } else if (errorData) {
@@ -1205,9 +1205,9 @@ const DashboardPage = () => {
              const errorMsg = typeof errorData === 'string' ? errorData :
                               errorData?.detail ||
                               (errorData && Object.values(errorData).flat().join(' ')) || // Flatten errors
-                              'Failed to update proposal status.';
+                              'Updated proposal status.';
             setUpdateError(`${errorMsg}`); // Set specific error message
-            console.error('Failed to update proposal status:', errorMsg, error.response?.data || error.message);
+            console.error('Updated proposal status:', errorMsg, error.response?.data || error.message);
             // Optionally: alert(`Failed to update status: ${errorMsg}`);
         }
     };

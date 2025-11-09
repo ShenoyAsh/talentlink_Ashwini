@@ -223,14 +223,3 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')  # Reads from .env
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') # Reads from .env
 DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER') # Use your email as the from address
-
-CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL')
-
-# Check if we are in production (i.e., CLOUDINARY_URL is set)
-if CLOUDINARY_URL:
-    DEFAULT_FILE_STORAGE = 'django_cloudinary_storage.storage.MediaCloudinaryStorage'
-    # MEDIA_URL is automatically set by django-cloudinary-storage
-else:
-    # Keep original settings for local development
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
