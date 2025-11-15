@@ -47,6 +47,7 @@ const HomePage = () => {
         }
     ];
 
+    // Stats are now defined here to be placed in the right column
     const stats = [
         { number: '10K+', label: 'Active Freelancers', icon: <Users size={24} /> },
         { number: '5K+', label: 'Completed Projects', icon: <CheckCircle size={24} /> },
@@ -85,9 +86,25 @@ const HomePage = () => {
         <div className="homepage">
             {/* Hero Section */}
             <section className="hero-section-enhanced">
+
+                {/* Video is no longer a full background */}
+                
                 <Container>
                     <Row className="align-items-center min-vh-75 py-5">
-                        <Col lg={6} className="text-white">
+                        
+                        {/* --- UPDATED LEFT COLUMN: VIDEO WINDOW --- */}
+                        <Col lg={6} className="text-center">
+                            {/* This div applies the floating window style */}
+                            <div className="hero-video-window">
+                                <video autoPlay loop muted playsInline>
+                                    <source src="/hero-background.mp4" type="video/mp4" />
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        </Col>
+
+                        {/* --- UPDATED RIGHT COLUMN: TEXT, ICON, BUTTONS, STATS --- */}
+                        <Col lg={6} className="text-white text-center text-lg-start mt-5 mt-lg-0">
                             <h1 className="display-3 fw-bold mb-4 animate-fade-in">
                                 Connect Talent with Opportunity
                             </h1>
@@ -95,15 +112,29 @@ const HomePage = () => {
                                 The premier platform connecting skilled freelancers with businesses 
                                 seeking exceptional talent. Build your career or find your dream team.
                             </p>
-                            <div className="d-flex gap-3 flex-wrap">
-                                <Button as={Link} to="/register" variant="light" size="lg" className="px-4 py-3 fw-bold">
-                                    Get Started Free <ArrowRight className="ms-2" size={20} />
-                                </Button>
-                                <Button as={Link} to="/projects" variant="outline-light" size="lg" className="px-4 py-3">
-                                    Browse Projects
-                                </Button>
-                            </div>
-                            <div className="mt-5 d-flex gap-4 flex-wrap">
+                            
+                            <Row className="align-items-center">
+                                {/* Buttons */}
+                                <Col lg={8}>
+                                    <div className="d-flex gap-3 flex-wrap justify-content-center justify-content-lg-start">
+                                        <Button as={Link} to="/register" variant="light" size="lg" className="px-4 py-3 fw-bold">
+                                            Get Started Free <ArrowRight className="ms-2" size={20} />
+                                        </Button>
+                                        <Button as={Link} to="/projects" variant="outline-light" size="lg" className="px-4 py-3">
+                                            Browse Projects
+                                        </Button>
+                                    </div>
+                                </Col>
+                                {/* Briefcase Icon */}
+                                <Col lg={4} className="text-center d-none d-lg-block">
+                                    <div className="bg-white bg-opacity-10 rounded-4 p-4 backdrop-blur d-inline-block">
+                                        <Briefcase size={80} className="text-white" />
+                                    </div>
+                                </Col>
+                            </Row>
+
+                            {/* Stats */}
+                            <div className="mt-5 d-flex gap-4 flex-wrap justify-content-center justify-content-lg-start">
                                 {stats.map((stat, idx) => (
                                     <div key={idx} className="text-center">
                                         <div className="text-white-50 mb-2">{stat.icon}</div>
@@ -111,13 +142,6 @@ const HomePage = () => {
                                         <p className="mb-0 text-white-50 small">{stat.label}</p>
                                     </div>
                                 ))}
-                            </div>
-                        </Col>
-                        <Col lg={6} className="text-center">
-                            <div className="hero-image-placeholder p-5">
-                                <div className="bg-white bg-opacity-10 rounded-4 p-5 backdrop-blur">
-                                    <Briefcase size={120} className="text-white" />
-                                </div>
                             </div>
                         </Col>
                     </Row>
@@ -198,4 +222,3 @@ const HomePage = () => {
 };
 
 export default HomePage;
-
