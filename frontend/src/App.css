@@ -466,3 +466,19 @@ body {
   background: rgba(102, 126, 234, 0.4);
   animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Base class to apply the animation */
+.slide-in {
+  animation: slideInUp 0.5s ease-out forwards;
+  opacity: 0; /* Start hidden */
+}

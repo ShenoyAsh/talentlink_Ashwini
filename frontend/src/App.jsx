@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
 import { Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
@@ -430,13 +431,26 @@ const LoginPage = () => {
         <div className="auth-page d-flex align-items-center justify-content-center">
             <Card style={{ width: '24rem' }} className="p-3 shadow-lg border-0 auth-card">
                 <Card.Body>
-                    <h2 className="text-center mb-4">Sign In</h2>
+                    {/* --- MODIFIED --- Added slide-in class and delay */}
+                    <h2 className="text-center mb-4 slide-in" style={{ animationDelay: '0ms' }}>Sign In</h2>
                     <Form onSubmit={handleSubmit}>
-                        <Form.Group className="mb-3"><Form.Label>Username</Form.Label><Form.Control type="text" value={username} onChange={e => setUsername(e.target.value)} required /></Form.Group>
-                        <Form.Group className="mb-3"><Form.Label>Password</Form.Label><Form.Control type="password" value={password} onChange={e => setPassword(e.target.value)} required /></Form.Group>
-                        <Button variant="primary" type="submit" className="w-100" disabled={loading}>{loading ? <Spinner as="span" animation="border" size="sm" /> : 'Sign In'}</Button>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Form.Group className="mb-3 slide-in" style={{ animationDelay: '100ms' }}>
+                            <Form.Label>Username</Form.Label>
+                            <Form.Control type="text" value={username} onChange={e => setUsername(e.target.value)} required />
+                        </Form.Group>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Form.Group className="mb-3 slide-in" style={{ animationDelay: '200ms' }}>
+                            <Form.Label>Password</Form.Label>
+                            <Form.Control type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                        </Form.Group>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Button variant="primary" type="submit" className="w-100 slide-in" style={{ animationDelay: '300ms' }} disabled={loading}>
+                            {loading ? <Spinner as="span" animation="border" size="sm" /> : 'Sign In'}
+                        </Button>
                     </Form>
-                     <p className="mt-3 text-center">
+                    {/* --- MODIFIED --- Added slide-in class and delay */}
+                    <p className="mt-3 text-center slide-in" style={{ animationDelay: '400ms' }}>
                         Don't have an account? <Link to="/register">Sign Up</Link>
                     </p>
                 </Card.Body>
@@ -481,18 +495,40 @@ const RegisterPage = () => {
          <div className="auth-page d-flex align-items-center justify-content-center py-5">
             <Card style={{ width: '24rem' }} className="p-3 shadow-lg border-0 auth-card">
                 <Card.Body>
-                    <h2 className="text-center mb-4">Create an Account</h2>
+                    {/* --- MODIFIED --- Added slide-in class and delay */}
+                    <h2 className="text-center mb-4 slide-in" style={{ animationDelay: '0ms' }}>Create an Account</h2>
                     {error && <Alert variant="danger">{error}</Alert>}
                     <Form onSubmit={handleSubmit}>
-                        <Form.Group className="mb-3"><Form.Label>Username</Form.Label><Form.Control type="text" value={username} onChange={e => setUsername(e.target.value)} required /></Form.Group>
-                        <Form.Group className="mb-3"><Form.Label>Email</Form.Label><Form.Control type="email" value={email} onChange={e => setEmail(e.target.value)} required /></Form.Group>
-                        <Form.Group className="mb-3"><Form.Label>Password</Form.Label><Form.Control type="password" value={password} onChange={e => setPassword(e.target.value)} required /></Form.Group>
-                        <Form.Group className="mb-3"><Form.Label>I am a:</Form.Label><div><Form.Check inline label="Freelancer" name="userType" type="radio" value="freelancer" checked={userType === 'freelancer'} onChange={e => setUserType(e.target.value)} id="radio-freelancer"/><Form.Check inline label="Client" name="userType" type="radio" value="client" checked={userType === 'client'} onChange={e => setUserType(e.target.value)} id="radio-client" /></div></Form.Group>
-                        <Button variant="primary" type="submit" className="w-100" disabled={loading}>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Form.Group className="mb-3 slide-in" style={{ animationDelay: '100ms' }}>
+                            <Form.Label>Username</Form.Label>
+                            <Form.Control type="text" value={username} onChange={e => setUsername(e.target.value)} required />
+                        </Form.Group>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Form.Group className="mb-3 slide-in" style={{ animationDelay: '200ms' }}>
+                            <Form.Label>Email</Form.Label>
+                            <Form.Control type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                        </Form.Group>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Form.Group className="mb-3 slide-in" style={{ animationDelay: '300ms' }}>
+                            <Form.Label>Password</Form.Label>
+                            <Form.Control type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                        </Form.Group>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Form.Group className="mb-3 slide-in" style={{ animationDelay: '400ms' }}>
+                            <Form.Label>I am a:</Form.Label>
+                            <div>
+                                <Form.Check inline label="Freelancer" name="userType" type="radio" value="freelancer" checked={userType === 'freelancer'} onChange={e => setUserType(e.target.value)} id="radio-freelancer"/>
+                                <Form.Check inline label="Client" name="userType" type="radio" value="client" checked={userType === 'client'} onChange={e => setUserType(e.target.value)} id="radio-client" />
+                            </div>
+                        </Form.Group>
+                        {/* --- MODIFIED --- Added slide-in class and delay */}
+                        <Button variant="primary" type="submit" className="w-100 slide-in" style={{ animationDelay: '500ms' }} disabled={loading}>
                              {loading ? <Spinner as="span" animation="border" size="sm" /> : 'Sign Up'}
                         </Button>
                     </Form>
-                     <p className="mt-3 text-center">
+                    {/* --- MODIFIED --- Added slide-in class and delay */}
+                    <p className="mt-3 text-center slide-in" style={{ animationDelay: '600ms' }}>
                         Already have an account? <Link to="/login">Sign In</Link>
                     </p>
                 </Card.Body>
